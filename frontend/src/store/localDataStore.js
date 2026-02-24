@@ -60,6 +60,18 @@ export const localDataStore = {
     }
   },
 
+  /** Add a document (e.g. from Playground Connect to System) so it appears in Inbound */
+  addDocument(doc) {
+    const data = this.getData();
+    const docs = data ? [...data.documents] : [];
+    docs.unshift(doc);
+    this.setData(
+      data
+        ? { ...data, documents: docs }
+        : { trading_partners: [], documents: docs, exceptions: [], audit_logs: [] }
+    );
+  },
+
   // Filter helpers to mimic API query params
   filterPartners(arr, { skip = 0, limit = 100, status, search } = {}) {
     let out = [...arr];

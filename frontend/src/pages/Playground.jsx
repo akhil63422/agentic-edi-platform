@@ -6,6 +6,7 @@ import {
   ArrowRight, Download, RotateCcw, FileJson,
 } from 'lucide-react';
 import api from '../services/api';
+import { localDataStore } from '@/store/localDataStore';
 
 const DEFAULT_SCHEMA = `{
   "type": "object",
@@ -282,6 +283,23 @@ const Playground = () => {
     const docTypeMatch = name.match(/\b(850|856|810|997)\b/) || schema.match(/"(\b850|856|810|997\b)"/);
     const docType = docTypeMatch ? docTypeMatch[1] : '850';
 
+    const docTypeLabel = { 850: 'X12 850', 856: 'X12 856', 810: 'X12 810', 997: 'X12 997' }[docType] || `X12 ${docType}`;
+    const docId = `playground_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const now = new Date().toISOString();
+
+    const newDoc = {
+      _id: docId,
+      partner_code: 'PLAYGROUND',
+      partner_id: 'playground',
+      document_type: docTypeLabel,
+      direction: 'Inbound',
+      status: 'Completed',
+      file_name: uploadedFile?.name || `playground_${docType}_${new Date().toISOString().slice(0, 10)}.json`,
+      received_at: now,
+      created_at: now,
+    };
+
+    let apiSucceeded = false;
     try {
       const res = await api.post('/playground/connect/', {
         pipeline_name: name,
@@ -291,21 +309,24 @@ const Playground = () => {
         file_name: uploadedFile?.name || null,
         file_size: uploadedFile?.size || null,
       });
-
-      const msg = res.data?.message || `"${name}" sent to the system successfully`;
-      setSendMsg(msg);
-      setTimeout(() => {
-        setSendMsg(null);
-        navigate('/inbound');
-      }, 2000);
+      apiSucceeded = true;
+      if (res.data?.document_id) newDoc._id = res.data.document_id;
     } catch (err) {
       console.error('Connect to system error:', err);
-      const detail = err.response?.data?.detail || err.message || 'Failed to connect';
-      setSendMsg(null);
-      alert(`Error: ${detail}`);
-    } finally {
-      setIsSending(false);
     }
+
+    // Always add to local store so it appears in Inbound (works when backend is down or using local data)
+    localDataStore.addDocument(newDoc);
+
+    const msg = apiSucceeded
+      ? `"${name}" sent to the system successfully`
+      : `"${name}" saved locally. File will appear in Inbound.`;
+    setSendMsg(msg);
+    setTimeout(() => {
+      setSendMsg(null);
+      navigate('/inbound');
+    }, 2000);
+    setIsSending(false);
   };
 
   const schemaLineCount = schema.split('\n').length;
