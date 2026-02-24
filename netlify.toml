@@ -1,0 +1,25 @@
+# Netlify config for EDI MVP frontend
+# Deploy: Connect this repo to Netlify; set REACT_APP_BACKEND_URL in Site settings
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "build"
+
+# Required: Backend API URL (set in Netlify Dashboard > Site settings > Environment variables)
+# Example: https://your-app.onrender.com/api/v1
+[build.environment]
+  NODE_VERSION = "18"
+
+# SPA routing - all paths serve index.html for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers (optional)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
