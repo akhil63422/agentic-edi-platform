@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Optional
 
 
@@ -33,8 +34,15 @@ class Settings(BaseSettings):
     AI_CONFIDENCE_THRESHOLD_HIGH: float = 0.90
     AI_CONFIDENCE_THRESHOLD_MEDIUM: float = 0.75
     
-    # CORS
+    # CORS (env: comma-separated, e.g. "https://app.onrender.com,http://localhost:3000")
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB

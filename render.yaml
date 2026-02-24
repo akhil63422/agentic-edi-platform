@@ -1,0 +1,30 @@
+# Render Blueprint - Deploy backend + frontend
+# Docs: https://render.com/docs/blueprint-spec
+# Deploy: Connect repo → New Blueprint → Add env vars in Dashboard
+
+services:
+  # Backend API
+  - type: web
+    name: edi-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+  # Frontend (Static Site)
+  - type: web
+    name: edi-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false
