@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { KPI3DCard } from '@/components/KPI3DCard';
 import { FlowVisualization } from '@/components/FlowVisualization';
 import { ActivityTable } from '@/components/ActivityTable';
-import { FileText, CheckCircle2, AlertTriangle, ArrowDownToLine, Download, Upload } from 'lucide-react';
+import { FileText, CheckCircle2, AlertTriangle, ArrowDownToLine, Download, Upload, Database, X } from 'lucide-react';
 import { websocketService } from '@/services/websocket';
 import { documentsService } from '@/services/documents';
 import { exceptionsService } from '@/services/exceptions';
@@ -293,7 +293,7 @@ export const Dashboard = () => {
         exceptions: payload.exceptions || [],
         audit_logs: payload.audit_logs || [],
       });
-      toast.success('Data imported successfully. Refreshing...');
+      toast.success('Data saved to browser. All pages will now use this data.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       await loadDashboardData();
     } catch (err) {
@@ -326,7 +326,24 @@ export const Dashboard = () => {
           </h1>
           <p className="text-cyan-300/70 mt-1 font-mono">Real-time overview of your EDI operations</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {dataService.hasLocalData() && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-400 font-mono text-sm">
+              <Database className="w-4 h-4" />
+              <span>Using browser data</span>
+              <button
+                onClick={() => {
+                  dataService.clearLocalData();
+                  toast.success('Cleared local data. Using API.');
+                  loadDashboardData();
+                }}
+                className="p-0.5 hover:bg-amber-500/30 rounded"
+                title="Clear and use API"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           <input
             ref={fileInputRef}
             type="file"
