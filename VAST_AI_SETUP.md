@@ -6,15 +6,25 @@ Run the full AI backend (Qwen 7B, Whisper, LayoutLM) on your vast.ai RTX 3090 in
 
 ## Architecture Options
 
-### Option 1: Full Stack on vast.ai (recommended – no Atlas SSL issues)
+### Option 1: Full Stack on vast.ai – Frontend + Backend (recommended, no CORS)
 
 | Component | Where | Notes |
 |-----------|-------|-------|
-| **Frontend** | Netlify / Render | Already deployed |
-| **Backend** | vast.ai GPU | Full models |
-| **MongoDB** | vast.ai (local) | Installed on instance – no SSL |
+| **Frontend** | vast.ai (served from backend) | Same origin as API – no CORS |
+| **Backend** | vast.ai GPU | Serves API + static frontend |
+| **MongoDB** | vast.ai (local) | Installed on instance |
 
-### Option 2: Backend + Atlas
+**One tunnel, one URL – everything works.**
+
+### Option 2: Frontend on Netlify, Backend on vast.ai
+
+| Component | Where | Notes |
+|-----------|-------|-------|
+| **Frontend** | Netlify | Requires CORS + tunnel |
+| **Backend** | vast.ai GPU | Expose via tunnel |
+| **MongoDB** | vast.ai (local) | Installed on instance |
+
+### Option 3: Backend + Atlas
 
 | Component | Where | Notes |
 |-----------|-------|-------|
@@ -24,9 +34,9 @@ Run the full AI backend (Qwen 7B, Whisper, LayoutLM) on your vast.ai RTX 3090 in
 
 ---
 
-## Full Stack on vast.ai (Proper Way)
+## Full Stack on vast.ai – Frontend + Backend (Recommended)
 
-Run everything on the instance – MongoDB + Backend. No Atlas SSL issues.
+Run everything on the instance – MongoDB + Backend + Frontend. Same origin = no CORS issues.
 
 ### One-command setup (run in Jupyter Terminal on vast.ai)
 
@@ -50,10 +60,11 @@ This script will:
 1. Install MongoDB 6.0 locally
 2. Clone the repo
 3. Install backend deps (`requirements-vast.txt`)
-4. Create `.env` with `MONGODB_URL=mongodb://localhost:27017/edi_platform`
-5. Seed sample data
+4. Build the frontend (with `/api/v1` as relative URL)
+5. Create `.env` with `MONGODB_URL`, `SERVE_FRONTEND=true`
+6. Seed sample data
 
-### Start the backend
+### Start the backend (serves API + frontend)
 
 ```bash
 cd /workspace/agentic-edi-platform/backend
@@ -62,12 +73,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 ### Expose port
 
-1. vast.ai → instance → **Config** → add port **8001**
-2. API URL: `http://YOUR_VAST_IP:8001/api/v1`
+1. vast.ai → **Tunnels** → create tunnel for `http://localhost:8001`
+2. Copy the `trycloudflare.com` URL
 
-### Point frontend to backend
+### Use the app
 
-In Netlify: **Environment variables** → `REACT_APP_BACKEND_URL` = `http://YOUR_VAST_IP:8001/api/v1` → Redeploy.
+Open the tunnel URL in your browser. You get:
+
+- **Frontend** at `/` (Dashboard, Partners, etc.)
+- **API** at `/api/v1`
+- **Docs** at `/docs`
+
+Same origin = no CORS, no Netlify config needed.
 
 ### If MongoDB install fails (minimal image)
 

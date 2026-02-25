@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     
+    # Serve frontend from backend (vast.ai single-port deployment)
+    SERVE_FRONTEND: bool = False
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

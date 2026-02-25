@@ -1,6 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from contextlib import asynccontextmanager
 import logging
 
@@ -61,10 +63,15 @@ app.include_router(partner_ai.router, prefix=settings.API_V1_STR)
 app.include_router(playground.router, prefix=settings.API_V1_STR)
 app.include_router(data.router, prefix=settings.API_V1_STR)
 
+# Frontend static files (when SERVE_FRONTEND=true, e.g. vast.ai single-port)
+FRONTEND_BUILD = Path(__file__).resolve().parent.parent.parent / "frontend" / "build"
+
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint - serve frontend or API info"""
+    if settings.SERVE_FRONTEND and (FRONTEND_BUILD / "index.html").exists():
+        return FileResponse(FRONTEND_BUILD / "index.html")
     return {
         "message": "Agentic EDI Platform API",
         "version": settings.APP_VERSION,
@@ -76,6 +83,26 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+# Serve frontend static files and SPA routes (must be last)
+if settings.SERVE_FRONTEND and FRONTEND_BUILD.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_BUILD / "static")), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve SPA - return index.html for non-API, non-file routes"""
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not found")
+        file_path = (FRONTEND_BUILD / full_path).resolve()
+        if not str(file_path).startswith(str(FRONTEND_BUILD.resolve())):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not found")
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(FRONTEND_BUILD / "index.html")
 
 
 if __name__ == "__main__":
