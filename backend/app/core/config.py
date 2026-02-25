@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     AI_CONFIDENCE_THRESHOLD_MEDIUM: float = 0.75
     
     # CORS (env: comma-separated string, e.g. "https://app.onrender.com,http://localhost:3000")
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://tranquil-blancmange-af2279.netlify.app,https://edi-frontend-xzel.onrender.com"
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
