@@ -37,19 +37,27 @@ Run the full AI backend (Qwen 7B, Whisper, LayoutLM) on your vast.ai RTX 3090 in
 
 ### Option A: Manual Setup (recommended)
 
+**If disk space is limited** (vLLM image already has torch/transformers):
+
 ```bash
-# On the vast.ai instance
+cd /workspace
+git clone https://github.com/akhil63422/agentic-edi-platform.git
+cd agentic-edi-platform/backend
+
+# Use system Python - NO venv (saves ~2GB)
+pip install --no-cache-dir -r requirements-vast.txt
+```
+
+**If you have enough disk** (fresh instance):
+
+```bash
 cd /workspace
 git clone https://github.com/akhil63422/agentic-edi-platform.git
 cd agentic-edi-platform/backend
 
 python3 -m venv venv
 source venv/bin/activate
-
-# Install torch with CUDA first
 pip install torch --index-url https://download.pytorch.org/whl/cu121
-
-# Install rest
 pip install -r requirements.txt
 ```
 
@@ -102,12 +110,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 ## Step 6: Expose the Port
 
-vast.ai maps ports. Check your instance:
-
-- **Direct-connect** instances: Use the public IP (e.g. `74.48.78.46`) and the port shown (often 8001 or a mapped port)
-- **Proxy** instances: vast.ai provides a URL like `https://xxx.vast.ai`
-
-Your API URL will be: `http://YOUR_VAST_IP:8001/api/v1`
+1. In vast.ai instance → **Config** → ensure port **8001** is in the exposed ports list
+2. If you need to add it: **Edit** instance → add `8001` to ports, then **Rebuild**
+3. Your API URL: `http://74.48.78.46:8001/api/v1` (use your instance's public IP)
 
 ---
 
