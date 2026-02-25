@@ -5,7 +5,8 @@ export const partnersService = {
   // Get all partners (uses localStorage when imported data exists)
   getAll: async (params = {}) => {
     const data = localDataStore.getData();
-    if (data) {
+    // Use local data only if it has partners; otherwise fetch from API
+    if (data && data.trading_partners?.length > 0) {
       return localDataStore.filterPartners(data.trading_partners, {
         skip: params.skip ?? 0,
         limit: params.limit ?? 100,

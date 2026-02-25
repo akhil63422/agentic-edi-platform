@@ -11,18 +11,25 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
 });
 
-// Request interceptor - Add auth token
+// Load runtime config (config.json) - allows changing backend URL without rebuild
+const configReady = fetch('/config.json')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((c) => {
+    if (c?.backendUrl) api.defaults.baseURL = c.backendUrl;
+  })
+  .catch(() => {});
+
+// Ensure config is loaded before first request (config.json overrides build-time URL)
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    await configReady;
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (err) => Promise.reject(err)
 );
 
 // Response interceptor - Handle errors

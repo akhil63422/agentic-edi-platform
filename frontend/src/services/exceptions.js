@@ -5,7 +5,7 @@ export const exceptionsService = {
   // Get all exceptions (uses localStorage when imported data exists)
   getAll: async (params = {}) => {
     const data = localDataStore.getData();
-    if (data) {
+    if (data && data.exceptions?.length > 0) {
       return localDataStore.filterExceptions(data.exceptions, {
         skip: params.skip ?? 0,
         limit: params.limit ?? 100,

@@ -5,7 +5,7 @@ export const documentsService = {
   // Get all documents (uses localStorage when imported data exists)
   getAll: async (params = {}) => {
     const data = localDataStore.getData();
-    if (data) {
+    if (data && data.documents?.length > 0) {
       return localDataStore.filterDocuments(data.documents, {
         skip: params.skip ?? 0,
         limit: params.limit ?? 100,
