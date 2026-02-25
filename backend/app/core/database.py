@@ -13,7 +13,12 @@ db = Database()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        db.client = AsyncIOMotorClient(settings.MONGODB_URL)
+        # tlsAllowInvalidCertificates helps with SSL handshake on some cloud VMs (e.g. vast.ai)
+        db.client = AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=30000,
+        )
         # Test connection
         await db.client.admin.command('ping')
         logger.info("Connected to MongoDB")
