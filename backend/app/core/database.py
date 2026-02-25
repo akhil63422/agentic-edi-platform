@@ -13,13 +13,13 @@ db = Database()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        import certifi
-        # Use certifi CA bundle - fixes SSL handshake on cloud VMs with incomplete system certs
-        db.client = AsyncIOMotorClient(
-            settings.MONGODB_URL,
-            tlsCAFile=certifi.where(),
-            serverSelectionTimeoutMS=30000,
-        )
+        # Local MongoDB (mongodb://) - no TLS. Atlas (mongodb+srv://) - use certifi for SSL
+        is_local = settings.MONGODB_URL.strip().lower().startswith("mongodb://localhost") or settings.MONGODB_URL.strip().lower().startswith("mongodb://127.0.0.1")
+        kwargs = {"serverSelectionTimeoutMS": 30000}
+        if not is_local:
+            import certifi
+            kwargs["tlsCAFile"] = certifi.where()
+        db.client = AsyncIOMotorClient(settings.MONGODB_URL, **kwargs)
         # Test connection
         await db.client.admin.command('ping')
         logger.info("Connected to MongoDB")
