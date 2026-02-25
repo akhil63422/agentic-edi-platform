@@ -13,10 +13,11 @@ db = Database()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        # tlsAllowInvalidCertificates helps with SSL handshake on some cloud VMs (e.g. vast.ai)
+        import certifi
+        # Use certifi CA bundle - fixes SSL handshake on cloud VMs with incomplete system certs
         db.client = AsyncIOMotorClient(
             settings.MONGODB_URL,
-            tlsAllowInvalidCertificates=True,
+            tlsCAFile=certifi.where(),
             serverSelectionTimeoutMS=30000,
         )
         # Test connection
