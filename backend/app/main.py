@@ -35,11 +35,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware (parse comma-separated string from env)
+# CORS middleware - allow explicit origins + regex for Netlify/Render/Cloudflare tunnels
 _cors_origins = [x.strip() for x in settings.CORS_ORIGINS.split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.(netlify\.app|onrender\.com|vercel\.app|trycloudflare\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
