@@ -284,10 +284,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             if (extracted.phone) updates.businessContact = { ...(updates.businessContact || fd.businessContact || {}), phone: extracted.phone };
             if (Object.keys(updates).length) setFormData((prev) => ({ ...prev, ...updates }));
             const idx = currentQuestionIndexRef.current;
-            const section = CONVERSATION_FLOW[idx.section];
-            const question = section?.questions[idx.question];
-            const normalizedText = question?.id === 'partnerCode' ? normalizePartnerCode(result.text) : result.text;
-            await handleAnswer(normalizedText || result.text);
+            const normalizedText = CONVERSATION_FLOW[idx.section]?.questions[idx.question]?.id === 'partnerCode'
+              ? normalizePartnerCode(result.text) : result.text;
+            await handleAnswer(normalizedText || result.text, idx);
             toast.success('Voice recognized by AI');
           } else {
             throw new Error(result?.error || 'No transcription');
@@ -421,12 +420,12 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     }
   };
 
-  const handleAnswer = async (answer) => {
+  const handleAnswer = async (answer, overrideIndex = null) => {
     if (!answer || !answer.trim()) return;
     if (isProcessing) return; // Prevent multiple simultaneous calls
-    
-    const currentSection = CONVERSATION_FLOW[currentQuestionIndex.section];
-    const currentQuestion = currentSection.questions[currentQuestionIndex.question];
+    const idx = overrideIndex ?? currentQuestionIndex;
+    const currentSection = CONVERSATION_FLOW[idx.section];
+    const currentQuestion = currentSection?.questions[idx.question];
     
     if (!currentQuestion) return;
     
@@ -533,15 +532,15 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     })();
 
     // Move to next question immediately (don't wait for AI)
-    moveToNextQuestion();
+    moveToNextQuestion(idx);
   };
 
-  const moveToNextQuestion = () => {
+  const moveToNextQuestion = (fromIndex = null) => {
     setIsProcessing(true);
-    
+    const idx = fromIndex ?? currentQuestionIndex;
     setTimeout(() => {
-      let nextSection = currentQuestionIndex.section;
-      let nextQuestion = currentQuestionIndex.question + 1;
+      let nextSection = idx.section;
+      let nextQuestion = idx.question + 1;
 
       // Check if we've completed all questions in current section
       if (nextQuestion >= CONVERSATION_FLOW[nextSection].questions.length) {
