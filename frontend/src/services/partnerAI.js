@@ -18,11 +18,8 @@ export const partnerAIService = {
       formData.append('context', JSON.stringify(context));
     }
     
-    const response = await api.post('/partners/ai/chat', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Do NOT set Content-Type - axios adds multipart boundary automatically
+    const response = await api.post('/partners/ai/chat', formData);
     return response.data;
   },
 
@@ -31,11 +28,7 @@ export const partnerAIService = {
     const formData = new FormData();
     formData.append('audio_file', audioFile);
     
-    const response = await api.post('/partners/ai/voice', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post('/partners/ai/voice', formData);
     return response.data;
   },
 
@@ -44,11 +37,7 @@ export const partnerAIService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await api.post('/partners/ai/document', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post('/partners/ai/document', formData);
     return response.data;
   },
 
