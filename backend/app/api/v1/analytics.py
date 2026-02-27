@@ -63,7 +63,7 @@ async def get_dashboard_analytics(
         
         # Processing time metrics
         pipeline = [
-            {"$match": {"processed_at": {"$exists": True, "$gte": start_date}}},
+            {"$match": {"processed_at": {"$exists": True, "$ne": None, "$gte": start_date}, "received_at": {"$exists": True, "$ne": None}}},
             {"$project": {
                 "processing_time": {
                     "$subtract": ["$processed_at", "$received_at"]
@@ -78,7 +78,9 @@ async def get_dashboard_analytics(
         ]
         
         time_stats = await db.documents.aggregate(pipeline).to_list(length=1)
-        avg_processing_time = time_stats[0]["avg_time"] / 1000 if time_stats else 0  # Convert to seconds
+        avg_processing_time = 0
+        if time_stats and time_stats[0].get("avg_time") is not None:
+            avg_processing_time = time_stats[0]["avg_time"] / 1000  # Convert ms to seconds
         
         return {
             "period_days": days,
@@ -111,7 +113,7 @@ async def get_dashboard_analytics(
 
 @router.get("/trends")
 async def get_trends(
-    metric: str = Query("documents", regex="^(documents|exceptions|partners)$"),
+    metric: str = Query("documents", pattern="^(documents|exceptions|partners)$"),
     days: int = Query(30, ge=1, le=365),
     db=Depends(get_database)
 ):
@@ -184,10 +186,24 @@ async def get_partner_performance(
         
         # Enrich with partner names
         for item in performance:
-            partner = await db.trading_partners.find_one({"_id": ObjectId(item["_id"])})
+            if item.get("_id") is None:
+                item["partner_name"] = "Unknown"
+                item["partner_code"] = "N/A"
+                item["success_rate"] = round(
+                    (item["completed"] / item["total_documents"] * 100) if item["total_documents"] > 0 else 0,
+                    2
+                )
+                continue
+            try:
+                partner = await db.trading_partners.find_one({"_id": ObjectId(item["_id"])})
+            except Exception:
+                partner = None
             if partner:
                 item["partner_name"] = partner.get("business_name")
                 item["partner_code"] = partner.get("partner_code")
+            else:
+                item["partner_name"] = "Unknown"
+                item["partner_code"] = "N/A"
             
             item["success_rate"] = round(
                 (item["completed"] / item["total_documents"] * 100) if item["total_documents"] > 0 else 0,
