@@ -8,7 +8,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
-from app.api.v1 import partners, documents, exceptions, audit, auth, mappings, process, websocket, analytics, exception_rules, partner_ai, playground, data
+from app.api.v1 import partners, documents, exceptions, audit, auth, mappings, process, websocket, analytics, exception_rules, partner_ai, playground, data, settings as settings_router
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +23,16 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
     await connect_to_mongo()
+    # Load Slack webhook from DB if set
+    from app.core.database import get_database
+    from app.services.slack_service import slack_service
+    try:
+        db = get_database()
+        doc = await db.platform_settings.find_one({"_id": "platform"})
+        if doc and doc.get("slack_webhook_url"):
+            slack_service.set_webhook(doc["slack_webhook_url"])
+    except Exception as e:
+        logger.debug(f"Could not load Slack settings: {e}")
     logger.info("Application started")
     yield
     # Shutdown
@@ -62,6 +72,7 @@ app.include_router(exception_rules.router, prefix=settings.API_V1_STR)
 app.include_router(partner_ai.router, prefix=settings.API_V1_STR)
 app.include_router(playground.router, prefix=settings.API_V1_STR)
 app.include_router(data.router, prefix=settings.API_V1_STR)
+app.include_router(settings_router.router, prefix=settings.API_V1_STR)
 
 # Frontend static files (when SERVE_FRONTEND=true, e.g. vast.ai single-port)
 FRONTEND_BUILD = Path(__file__).resolve().parent.parent.parent / "frontend" / "build"
@@ -83,6 +94,23 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/api/v1")
+async def api_v1_root():
+    """API v1 root - lists available endpoints"""
+    return {
+        "message": "Agentic EDI Platform API",
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "endpoints": {
+            "partners": "/api/v1/partners",
+            "documents": "/api/v1/documents",
+            "exceptions": "/api/v1/exceptions",
+            "audit": "/api/v1/audit",
+            "health": "/health",
+        }
+    }
 
 
 # Serve frontend static files and SPA routes (must be last)

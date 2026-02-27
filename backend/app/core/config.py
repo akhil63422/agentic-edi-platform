@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     
     # Serve frontend from backend (vast.ai single-port deployment)
     SERVE_FRONTEND: bool = False
-    
+
+    # Slack notifications (optional - can also be set via Settings API)
+    SLACK_WEBHOOK_URL: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = True

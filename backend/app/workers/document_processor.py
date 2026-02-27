@@ -67,6 +67,8 @@ class DocumentProcessor:
                     "Parsing Error", "Critical", str(e)
                 )
                 await self._update_status(db, document_id, "Failed")
+                from app.services.slack_service import slack_service
+                await slack_service.notify_document_status(document_id, "Failed", partner.get("partner_code"), document.get("document_type"))
                 return {"success": False, "error": str(e)}
             
             # Step 3: Update status to Validating
@@ -144,6 +146,8 @@ class DocumentProcessor:
             if ai_confidence >= 0.90:
                 # High confidence - auto-approve
                 await self._update_status(db, document_id, "Completed")
+                from app.services.slack_service import slack_service
+                await slack_service.notify_document_status(document_id, "Completed", partner.get("partner_code"), document.get("document_type"))
                 
                 # Post to ERP if configured
                 if canonical_json and partner.get("erp_context"):
@@ -194,6 +198,10 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error processing document {document_id}: {e}")
             await self._update_status(db, document_id, "Failed")
+            from app.services.slack_service import slack_service
+            document = await db.documents.find_one({"_id": ObjectId(document_id)})
+            partner = await db.trading_partners.find_one({"_id": ObjectId(document["partner_id"])}) if document else None
+            await slack_service.notify_document_status(document_id, "Failed", partner.get("partner_code") if partner else None, document.get("document_type") if document else None)
             return {"success": False, "error": str(e)}
     
     async def _update_status(self, db, document_id: str, status: str):
@@ -221,6 +229,14 @@ class DocumentProcessor:
             description=description
         )
         result = await db.exceptions.insert_one(exception_data.model_dump())
+        from app.services.slack_service import slack_service
+        await slack_service.notify_exception(
+            exception_type=exception_type,
+            severity=severity,
+            description=description,
+            document_id=document_id,
+            partner_id=partner_id,
+        )
         return str(result.inserted_id)
     
     async def _apply_mapping(self, parsed_segments: list, mapping: dict) -> Dict[str, Any]:

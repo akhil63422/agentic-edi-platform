@@ -58,7 +58,14 @@ class ExceptionEngine:
                         exception = await self._create_exception_from_rule(
                             db, document_id, partner_id, rule
                         )
-                        # TODO: Send notification
+                        from app.services.slack_service import slack_service
+                        await slack_service.notify_exception(
+                            exception_type=rule["exception_type"],
+                            severity=rule["severity"],
+                            description=rule.get("description", "Condition matched"),
+                            document_id=document_id,
+                            partner_id=partner_id,
+                        )
                         exceptions_created.append(exception)
             
             return exceptions_created

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings as SettingsIcon,
   User,
@@ -95,6 +95,26 @@ export const Settings = () => {
 
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [slackConfigured, setSlackConfigured] = useState(false);
+
+  // Load Slack settings from backend
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const { getSettings } = await import('@/services/settings');
+        const data = await getSettings();
+        setSlackConfigured(data.slack_webhook_configured || false);
+        setSettings(prev => ({
+          ...prev,
+          ...(data.exception_alerts !== undefined && { exceptionAlerts: data.exception_alerts }),
+          ...(data.document_alerts !== undefined && { realTimeAlerts: data.document_alerts }),
+        }));
+      } catch (err) {
+        // API may not be available
+      }
+    };
+    loadSettings();
+  }, []);
 
   const handleChange = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -114,11 +134,21 @@ export const Settings = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setSaving(false);
-    setHasChanges(false);
-    toast.success('Settings saved successfully');
+    try {
+      const { updateSettings } = await import('@/services/settings');
+      await updateSettings({
+        slack_webhook_url: settings.slackWebhook || null,
+        exception_alerts: settings.exceptionAlerts,
+        document_alerts: settings.realTimeAlerts,
+      });
+      setSlackConfigured(Boolean(settings.slackWebhook));
+      setHasChanges(false);
+      toast.success('Settings saved successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -702,8 +732,11 @@ export const Settings = () => {
                   id="slackWebhook"
                   value={settings.slackWebhook}
                   onChange={(e) => handleChange('slackWebhook', e.target.value)}
-                  placeholder="https://hooks.slack.com/services/..."
+                  placeholder={slackConfigured ? "Configured – enter new URL to replace" : "https://hooks.slack.com/services/..."}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Get a webhook from Slack: Apps → Incoming Webhooks. Alerts for exceptions and document status.
+                </p>
               </div>
             </CardContent>
           </Card>
