@@ -307,14 +307,14 @@ class PartnerAIService:
             ]
             for pat in nl_patterns:
                 match = re.search(pat, text, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                if len(name) > 1 and name.lower() not in ("a", "the", "it"):
-                    name_lower = name.lower()
-                    synonyms = getattr(self, "_name_synonyms", None) or {"one word": "oneworld"}
-                    name = synonyms.get(name_lower, name)
-                    extracted["business_name"] = name.title() if name.islower() else name
-                    break
+                if match:
+                    name = match.group(1).strip()
+                    if len(name) > 1 and name.lower() not in ("a", "the", "it"):
+                        name_lower = name.lower()
+                        synonyms = getattr(self, "_name_synonyms", None) or {"one word": "oneworld"}
+                        name = synonyms.get(name_lower, name)
+                        extracted["business_name"] = name.title() if name.islower() else name
+                        break
             if not extracted.get("business_name"):
                 for pat in [
                     r"business name[:\s]+([A-Za-z0-9\s&.,]+)",
