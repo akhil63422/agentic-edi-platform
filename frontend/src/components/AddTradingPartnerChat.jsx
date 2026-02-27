@@ -9,6 +9,14 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { partnerAIService } from '@/services/partnerAI';
 
+// Normalize voice input for partner code (handles "1 2 3", "one two three", etc.)
+const normalizePartnerCode = (text) => {
+  const words = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', oh: '0' };
+  const parts = String(text || '').trim().toLowerCase().split(/\s+/);
+  const result = parts.map((p) => words[p] ?? p.replace(/\D/g, '')).join('');
+  return result.slice(0, 10).toUpperCase() || text.replace(/\s/g, '').slice(0, 10).toUpperCase();
+};
+
 // Conversation flow configuration
 const CONVERSATION_FLOW = [
   {
@@ -186,7 +194,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const formDataRef = useRef(formData);
+  const currentQuestionIndexRef = useRef(currentQuestionIndex);
   formDataRef.current = formData;
+  currentQuestionIndexRef.current = currentQuestionIndex;
 
   // Check AI backend status on mount
   useEffect(() => {
@@ -273,7 +283,11 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             if (extracted.email) updates.businessContact = { ...(fd.businessContact || {}), email: extracted.email };
             if (extracted.phone) updates.businessContact = { ...(updates.businessContact || fd.businessContact || {}), phone: extracted.phone };
             if (Object.keys(updates).length) setFormData((prev) => ({ ...prev, ...updates }));
-            await handleAnswer(result.text);
+            const idx = currentQuestionIndexRef.current;
+            const section = CONVERSATION_FLOW[idx.section];
+            const question = section?.questions[idx.question];
+            const normalizedText = question?.id === 'partnerCode' ? normalizePartnerCode(result.text) : result.text;
+            await handleAnswer(normalizedText || result.text);
             toast.success('Voice recognized by AI');
           } else {
             throw new Error(result?.error || 'No transcription');
@@ -452,7 +466,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     } else if (currentQuestion.id === 'documents') {
       updates.documents = answer.split(', ').map(doc => doc.split(' ')[0]);
     } else if (currentQuestion.id === 'partnerCode') {
-      updates.partnerCode = answer.toUpperCase();
+      updates.partnerCode = normalizePartnerCode(answer);
     } else {
       updates[currentQuestion.id] = answer;
     }

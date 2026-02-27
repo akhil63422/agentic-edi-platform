@@ -285,6 +285,25 @@ class PartnerAIService:
                 "error": str(e)
             }
     
+    def _normalize_partner_code(self, text: str) -> str:
+        """Convert voice input (e.g. 'one two three' or '1 2 3') to alphanumeric code, max 10 chars."""
+        word_to_digit = {
+            "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+            "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+            "oh": "0",
+        }
+        text = text.strip().lower()
+        parts = re.split(r"\s+", text)
+        result = []
+        for p in parts:
+            if p in word_to_digit:
+                result.append(word_to_digit[p])
+            else:
+                digits = re.sub(r"\D", "", p)
+                result.append(digits if digits else p)
+        code = "".join(result)[:10]
+        return code.upper() if code else ""
+
     def _extract_partner_info(
         self,
         text: str,
@@ -384,9 +403,9 @@ class PartnerAIService:
         if current_question == "businessName" and answer and not extracted.get("business_name"):
             extracted["business_name"] = answer.strip()
         elif current_question == "partnerCode" and answer and not extracted.get("partner_code"):
-            code = re.sub(r"\s+", "", answer)[:10]
+            code = self._normalize_partner_code(answer)
             if code:
-                extracted["partner_code"] = code.upper()
+                extracted["partner_code"] = code
         elif current_question == "role" and answer:
             extracted["role"] = answer
         elif current_question == "industry" and answer:
