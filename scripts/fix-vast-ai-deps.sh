@@ -10,17 +10,19 @@ cd /workspace/agentic-edi-platform/backend 2>/dev/null || cd /workspace/agentic-
   exit 1
 }
 
-echo ">>> Restoring vLLM-compatible versions (fastapi, pydantic, openai, httpx)..."
+echo ">>> Restoring vLLM-compatible versions (fastapi, pydantic, openai, httpx, uvicorn, pydantic-settings)..."
 pip install --no-cache-dir -q \
   'fastapi[standard]>=0.115.0' \
   'openai>=1.99.1' \
   'pydantic>=2.12.0' \
+  'pydantic-settings>=2.5.2' \
   'httpx>=0.27.1' \
-  'starlette>=0.49.1'
+  'starlette>=0.49.1' \
+  'uvicorn[standard]>=0.31.1'
 
-echo ">>> Restoring torch/transformers for vLLM compatibility..."
-echo "    (If vLLM conflicts persist, try: pip install 'torch==2.9.1' 'transformers>=4.56.0,<5' --index-url https://download.pytorch.org/whl/cu121)"
-pip install --no-cache-dir -q 'transformers>=4.56.0,<5' 2>/dev/null || true
+echo ">>> Restoring torch/transformers for vLLM (torch==2.9.1, transformers 4.x)..."
+pip install --no-cache-dir -q 'torch==2.9.1' 'transformers>=4.56.0,<5' \
+  --index-url https://download.pytorch.org/whl/cu121
 
 echo ">>> Installing EDI backend deps (requirements-vast.txt)..."
 pip install --no-cache-dir -q -r requirements-vast.txt
