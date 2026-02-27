@@ -304,6 +304,34 @@ class PartnerAIService:
         code = "".join(result)[:10]
         return code.upper() if code else ""
 
+    def _normalize_voice_option(self, text: str, options: list) -> str:
+        """Match voice input to valid option (e.g. 'customer' -> 'Customer', 's f t p' -> 'SFTP')."""
+        if not text or not options:
+            return text.strip() if text else ""
+        q = text.strip().lower().replace("-", " ").replace("/", " ").replace("_", " ")
+        # Common voice synonyms for EDI/partner terms
+        synonyms = {
+            "customer": "Customer", "client": "Customer", "buyer": "Customer",
+            "supplier": "Supplier", "vendor": "Supplier", "seller": "Supplier",
+            "both": "Both", "either": "Both", "each": "Both",
+            "ex twelve": "X12", "x 12": "X12", "x twelve": "X12",
+            "s f t p": "SFTP", "sftp": "SFTP", "secure ftp": "SFTP",
+            "new york": "America/New_York", "eastern": "America/New_York",
+            "chicago": "America/Chicago", "central": "America/Chicago",
+            "denver": "America/Denver", "mountain": "America/Denver",
+            "los angeles": "America/Los_Angeles", "pacific": "America/Los_Angeles",
+        }
+        if q in synonyms and synonyms[q] in options:
+            return synonyms[q]
+        for opt in options:
+            opt_lower = opt.lower().replace("-", " ").replace("/", " ").replace("_", " ")
+            key = opt.split("(")[0].strip().lower()
+            if q == opt_lower or q == key or opt_lower.startswith(q) or q.startswith(key):
+                return opt
+            if q in opt_lower or (len(q) >= 2 and key and (q in key or key in q)):
+                return opt
+        return text.strip()
+
     def _extract_partner_info(
         self,
         text: str,
@@ -407,11 +435,19 @@ class PartnerAIService:
             if code:
                 extracted["partner_code"] = code
         elif current_question == "role" and answer:
-            extracted["role"] = answer
+            extracted["role"] = self._normalize_voice_option(answer, ["Customer", "Supplier", "Both"])
         elif current_question == "industry" and answer:
-            extracted["industry"] = answer
+            extracted["industry"] = self._normalize_voice_option(answer, ["Retail", "Manufacturing", "Logistics", "Healthcare", "Automotive", "Other"])
         elif current_question == "country" and answer:
-            extracted["country"] = answer
+            extracted["country"] = answer.strip()
+        elif current_question == "timezone" and answer:
+            extracted["timezone"] = self._normalize_voice_option(answer, ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "UTC", "Other"])
+        elif current_question == "ediStandard" and answer:
+            extracted["ediStandard"] = self._normalize_voice_option(answer, ["X12", "EDIFACT", "TRADACOMS"])
+        elif current_question == "version" and answer:
+            extracted["version"] = self._normalize_voice_option(answer, ["5010", "4010", "3060"])
+        elif current_question == "transportType" and answer:
+            extracted["transportType"] = self._normalize_voice_option(answer, ["SFTP", "S3", "FTP", "AS2"])
         
         display_answer = answer
         if current_question == "partnerCode" and extracted.get("partner_code"):

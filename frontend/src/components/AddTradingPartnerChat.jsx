@@ -17,6 +17,25 @@ const normalizePartnerCode = (text) => {
   return result.slice(0, 10).toUpperCase() || text.replace(/\s/g, '').slice(0, 10).toUpperCase();
 };
 
+// Match voice input to multi-select options (e.g. "customer" -> "Customer", "america new york" -> "America/New_York")
+const matchVoiceToOptions = (text, options = []) => {
+  if (!text?.trim() || !options?.length) return null;
+  const q = String(text).trim().toLowerCase().replace(/\s+/g, ' ');
+  const lowerOptions = options.map((o) => ({ original: o, lower: o.toLowerCase().replace(/[_\-\/]/g, ' '), key: o.split(/[\s\(]/)[0]?.toLowerCase() }));
+  // Exact or starts-with match
+  for (const { original, lower, key } of lowerOptions) {
+    if (lower === q || lower.startsWith(q) || q === key || q.startsWith(key)) return original;
+  }
+  // Partial match (e.g. "retail" in "Retail", "customer" in "Customer")
+  for (const { original, lower, key } of lowerOptions) {
+    if (lower.includes(q) || q.includes(key) || (q.length >= 2 && key?.includes(q))) return original;
+  }
+  // Multi-select: "850 and 810" or "850, 810" -> match each part
+  const parts = q.split(/\s+and\s+|\s*,\s*|\s+/).filter((p) => p.length >= 2);
+  const matched = [...new Set(parts.map((p) => lowerOptions.find(({ lower, key }) => lower.includes(p) || key?.includes(p) || p.includes(key))).filter(Boolean).map(({ original }) => original))];
+  return matched.length > 0 ? (matched.length === 1 ? matched[0] : matched) : null;
+};
+
 // Conversation flow configuration
 const CONVERSATION_FLOW = [
   {
@@ -246,9 +265,14 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
         if (transcript?.trim()) {
           setInputValue(transcript);
           const idx = currentQuestionIndexRef.current;
-          const normalizedText = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question]?.id === 'partnerCode'
-            ? normalizePartnerCode(transcript) : transcript;
-          setTimeout(() => handleAnswer(normalizedText || transcript, idx).catch(console.error), 100);
+          const q = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question];
+          let answerText = transcript.trim();
+          if (q?.id === 'partnerCode') answerText = normalizePartnerCode(answerText) || answerText;
+          else if (q?.options?.length) {
+            const matched = matchVoiceToOptions(answerText, q.options);
+            answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
+          }
+          setTimeout(() => handleAnswer(answerText, idx).catch(console.error), 100);
         }
         setIsListening(false);
       };
@@ -287,9 +311,14 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             if (extracted.phone) updates.businessContact = { ...(updates.businessContact || fd.businessContact || {}), phone: extracted.phone };
             if (Object.keys(updates).length) setFormData((prev) => ({ ...prev, ...updates }));
             const idx = currentQuestionIndexRef.current;
-            const normalizedText = CONVERSATION_FLOW[idx.section]?.questions[idx.question]?.id === 'partnerCode'
-              ? normalizePartnerCode(result.text) : result.text;
-            await handleAnswer(normalizedText || result.text, idx);
+            const q = CONVERSATION_FLOW[idx.section]?.questions[idx.question];
+            let answerText = result.text?.trim() || '';
+            if (q?.id === 'partnerCode') answerText = normalizePartnerCode(answerText) || answerText;
+            else if (q?.options?.length) {
+              const matched = matchVoiceToOptions(answerText, q.options);
+              answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
+            }
+            await handleAnswer(answerText, idx);
             toast.success('Voice recognized by AI');
           } else {
             throw new Error(result?.error || 'No transcription');
