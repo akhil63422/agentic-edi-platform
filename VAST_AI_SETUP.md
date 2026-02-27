@@ -66,10 +66,22 @@ This script will:
 
 ### Start the backend (serves API + frontend)
 
+**Recommended** – ensures MongoDB is running first:
+
+```bash
+cd /workspace/agentic-edi-platform
+chmod +x scripts/start-vast-ai.sh
+./scripts/start-vast-ai.sh
+```
+
+Or manually:
+
 ```bash
 cd /workspace/agentic-edi-platform/backend
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
+
+> **If you see "timeout loading partners"** – MongoDB may not be running. See [CLOUD_DB_TROUBLESHOOTING.md](CLOUD_DB_TROUBLESHOOTING.md).
 
 ### Expose port
 

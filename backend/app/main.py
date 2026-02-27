@@ -98,9 +98,20 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+async def health_check(db_check: bool = False):
+    """Health check endpoint. Use ?db_check=true to verify MongoDB connectivity."""
+    out = {"status": "healthy"}
+    if db_check:
+        try:
+            from app.core.database import get_database
+            db = get_database()
+            await db.command("ping")
+            out["database"] = "connected"
+        except Exception as e:
+            out["database"] = "error"
+            out["database_error"] = str(e)
+            out["status"] = "degraded"
+    return out
 
 
 @app.get("/api/v1")
