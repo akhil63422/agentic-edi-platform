@@ -1,26 +1,44 @@
 #!/bin/bash
 # Start EDI Platform on vast.ai - ensures MongoDB is running before backend
 # Run from: cd /workspace/agentic-edi-platform && ./scripts/start-vast-ai.sh
+# Usage: ./scripts/start-vast-ai.sh [--seed]  (--seed = run populate_sample_data first)
 
 set -e
 cd "$(dirname "$0")/.."
 
+SEED_DATA=false
+[[ "${1:-}" == "--seed" ]] && SEED_DATA=true
+
 MONGODB_DATA="${MONGODB_DATA:-/workspace/mongodb_data}"
-echo ">>> Checking MongoDB..."
-if ! pgrep -x mongod >/dev/null 2>&1; then
-  echo ">>> Starting MongoDB..."
-  mkdir -p "$MONGODB_DATA"
-  rm -f "$MONGODB_DATA/mongod.lock" 2>/dev/null || true
-  mongod --fork --logpath /tmp/mongod.log --dbpath "$MONGODB_DATA" --bind_ip 127.0.0.1 2>/dev/null || \
-    mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data --bind_ip 127.0.0.1 2>/dev/null || true
-  sleep 2
+
+# Kill any stale mongod (fixes "Address already in use")
+echo ">>> Stopping any existing MongoDB..."
+pkill -9 mongod 2>/dev/null || true
+sleep 2
+
+echo ">>> Starting MongoDB..."
+mkdir -p "$MONGODB_DATA"
+rm -f "$MONGODB_DATA/mongod.lock" 2>/dev/null || true
+if mongod --fork --logpath /tmp/mongod.log --dbpath "$MONGODB_DATA" --bind_ip 127.0.0.1 2>/dev/null; then
+  echo ">>> MongoDB started"
+elif mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data --bind_ip 127.0.0.1 2>/dev/null; then
+  echo ">>> MongoDB started (using /tmp/mongodb_data)"
+else
+  echo ">>> MongoDB failed. Try: mongod --logpath /tmp/mongod.log --dbpath $MONGODB_DATA --bind_ip 127.0.0.1 (no --fork) to see error"
+  exit 1
+fi
+sleep 2
+
+# Optional: seed sample data
+if $SEED_DATA; then
+  echo ">>> Seeding sample data..."
+  cd backend && python populate_sample_data.py 2>/dev/null || true
+  cd ..
 fi
 
-if pgrep -x mongod >/dev/null 2>&1; then
-  echo ">>> MongoDB is running"
-else
-  echo ">>> WARNING: MongoDB may not have started. Check: tail /tmp/mongod.log"
-fi
+# Stop any existing backend
+pkill -f uvicorn 2>/dev/null || true
+sleep 1
 
 echo ">>> Starting backend..."
 cd backend

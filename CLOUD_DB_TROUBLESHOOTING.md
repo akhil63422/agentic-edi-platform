@@ -1,6 +1,29 @@
 # Cloud Database Troubleshooting
 
-When you see **"Error loading partners: timeout of 30000ms exceeded"** in the cloud, follow these steps.
+When you see **"Error loading partners: timeout of 30000ms exceeded"** or **"Connection refused"** in the cloud, follow these steps.
+
+---
+
+## Full reset (run this first)
+
+On vast.ai, run this to pull latest code, restart MongoDB + backend, and seed sample data:
+
+```bash
+cd /workspace/agentic-edi-platform
+git pull origin main
+chmod +x scripts/start-vast-ai.sh
+./scripts/start-vast-ai.sh --seed
+```
+
+Use `--seed` to populate sample partners/documents. Omit it if you already have data.
+
+**To run in background:**
+```bash
+cd /workspace/agentic-edi-platform
+git pull origin main
+./scripts/start-vast-ai.sh --seed &
+# Or: nohup ./scripts/start-vast-ai.sh --seed > /workspace/backend.log 2>&1 &
+```
 
 ---
 
