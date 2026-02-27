@@ -14,6 +14,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/partners/ai", tags=["partner-ai"])
 
 
+@router.get("/status")
+async def get_ai_status():
+    """Check if Hugging Face AI (Qwen, Whisper) is available"""
+    try:
+        from app.services.partner_ai_service import HAS_GPU, HF_AVAILABLE
+        return {
+            "available": HF_AVAILABLE,
+            "gpu": HAS_GPU,
+            "models": {
+                "chat": "Qwen2.5-7B-Instruct",
+                "voice": "Whisper-base",
+                "document": "LayoutLMv3",
+            },
+        }
+    except Exception as e:
+        return {"available": False, "error": str(e)}
+
+
 @router.post("/chat")
 async def process_chat(
     request: Request,

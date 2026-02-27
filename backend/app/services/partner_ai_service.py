@@ -211,11 +211,10 @@ Be conversational and guide the user through the setup process."""
                     "error": "Whisper model not loaded"
                 }
             
-            # Process audio
+            # Process audio (librosa supports wav, mp3, ogg; audioread adds webm if ffmpeg present)
             import librosa
             import numpy as np
-            
-            # Load audio
+
             audio_array, sample_rate = librosa.load(BytesIO(audio_data), sr=16000)
             
             # Process with Whisper

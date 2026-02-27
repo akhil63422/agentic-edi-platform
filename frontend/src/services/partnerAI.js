@@ -1,6 +1,12 @@
 import api from './api';
 
 export const partnerAIService = {
+  // Check AI status (Hugging Face models available)
+  getStatus: async () => {
+    const response = await api.get('/partners/ai/status');
+    return response.data;
+  },
+
   // Process chat message
   processChat: async (message, conversationHistory = [], context = {}) => {
     const formData = new FormData();

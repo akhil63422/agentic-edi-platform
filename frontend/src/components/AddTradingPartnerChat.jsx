@@ -180,8 +180,26 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [formData, setFormData] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [aiStatus, setAiStatus] = useState('checking'); // 'active' | 'fallback' | 'checking'
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+
+  // Check AI backend status on mount
+  useEffect(() => {
+    const checkAI = async () => {
+      try {
+        const result = await partnerAIService.getStatus();
+        setAiStatus(result?.available ? 'active' : 'fallback');
+      } catch {
+        setAiStatus('fallback');
+      }
+    };
+    if (open) checkAI();
+  }, [open]);
 
   // Initialize conversation
   useEffect(() => {
@@ -205,7 +223,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Voice recognition setup
+  // Browser fallback: SpeechRecognition (Chrome)
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -213,46 +231,89 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = async (event) => {
+      recognitionRef.current.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        if (!transcript || !transcript.trim()) return;
-        
-        setInputValue(transcript);
-        setIsListening(false);
-        
-        // Use transcript directly
-        setTimeout(() => {
-          handleAnswer(transcript).catch(err => {
-            console.error('Error handling voice answer:', err);
-          });
-        }, 100);
-      };
-
-      recognitionRef.current.onerror = () => {
-        setIsListening(false);
-        toast.error('Voice recognition error. Please try again.');
-      };
-
-      recognitionRef.current.onend = () => {
+        if (transcript?.trim()) {
+          setInputValue(transcript);
+          setTimeout(() => handleAnswer(transcript).catch(console.error), 100);
+        }
         setIsListening(false);
       };
+      recognitionRef.current.onerror = () => setIsListening(false);
+      recognitionRef.current.onend = () => setIsListening(false);
     }
   }, []);
 
-  const startListening = () => {
-    if (recognitionRef.current && !isListening) {
-      setIsListening(true);
-      recognitionRef.current.start();
-      toast.info('Listening... Speak now.');
+  const startListening = async () => {
+    if (isListening) return;
+    setIsListening(true);
+    toast.info('Listening... Speak now.');
+
+    // Try backend Whisper first (server-side, more accurate)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => e.data.size && audioChunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+        try {
+          const result = await partnerAIService.processVoice(blob);
+          if (result?.success && result?.text?.trim()) {
+            setIsListening(false);
+            const extracted = result.extracted_data || {};
+            const updates = {};
+            if (extracted.business_name) updates.businessName = extracted.business_name;
+            if (extracted.partner_code) updates.partnerCode = extracted.partner_code.toUpperCase();
+            if (extracted.role) updates.role = extracted.role;
+            if (extracted.industry) updates.industry = extracted.industry;
+            if (extracted.country) updates.country = extracted.country;
+            const fd = formDataRef.current;
+            if (extracted.email) updates.businessContact = { ...(fd.businessContact || {}), email: extracted.email };
+            if (extracted.phone) updates.businessContact = { ...(updates.businessContact || fd.businessContact || {}), phone: extracted.phone };
+            if (Object.keys(updates).length) setFormData((prev) => ({ ...prev, ...updates }));
+            await handleAnswer(result.text);
+            toast.success('Voice recognized by AI');
+          } else {
+            throw new Error(result?.error || 'No transcription');
+          }
+        } catch (err) {
+          console.warn('Backend voice failed, using browser:', err);
+          if (recognitionRef.current) recognitionRef.current.start();
+          else {
+            setIsListening(false);
+            toast.error('Voice not available. Please type your answer.');
+          }
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      // Auto-stop after 10s
+      setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+        }
+      }, 10000);
+    } catch (err) {
+      console.warn('Microphone access failed:', err);
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+      } else {
+        setIsListening(false);
+        toast.error('Microphone access denied. Please type your answer.');
+      }
     }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
+    if (recognitionRef.current?.state === 'listening') {
+      recognitionRef.current.stop();
+    }
+    setIsListening(false);
   };
 
   const handleFileUpload = async (event) => {
@@ -648,8 +709,14 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
                 <span className="text-purple-400">PARTNER</span>
                 <span className="text-pink-400">SETUP</span>
               </DialogTitle>
-              <p className="text-sm text-cyan-300 mt-1 font-mono">
+              <p className="text-sm text-cyan-300 mt-1 font-mono flex items-center gap-2">
                 {'>'} Initializing partner configuration protocol...
+                {aiStatus === 'active' && (
+                  <Badge className="text-xs bg-green-500/20 border-green-500/50 text-green-300">AI Active</Badge>
+                )}
+                {aiStatus === 'fallback' && (
+                  <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-300">AI Fallback</Badge>
+                )}
               </p>
             </div>
             <Button 
@@ -845,7 +912,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept=".pdf,.doc,.docx,.txt"
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.txt"
                 onChange={handleFileUpload}
                 className="hidden"
               />
