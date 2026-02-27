@@ -11,13 +11,18 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq gnupg curl wget
 # MongoDB 6.0 for broader compatibility
-curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg -o /usr/share/keyrings/mongodb-server-6.0.gpg --dearmor
+curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --batch --yes -o /usr/share/keyrings/mongodb-server-6.0.gpg --dearmor
 echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
 apt-get update -qq
 apt-get install -y -qq mongodb-org
-# Start MongoDB (no systemd in container - use fork)
-mkdir -p /tmp/mongodb_data
-mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data 2>/dev/null || true
+# Start MongoDB - use /workspace for dbpath (more space), remove stale lock, use smallfiles for containers
+MONGODB_DATA=/workspace/mongodb_data
+mkdir -p "$MONGODB_DATA"
+rm -f "$MONGODB_DATA/mongod.lock" 2>/dev/null
+pkill -9 mongod 2>/dev/null || true
+sleep 1
+mongod --fork --logpath /tmp/mongod.log --dbpath "$MONGODB_DATA" --bind_ip 127.0.0.1 --smallfiles 2>/dev/null || \
+  mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data --bind_ip 127.0.0.1 --smallfiles 2>/dev/null || true
 sleep 2
 
 # 2. Clone repo
