@@ -23,16 +23,23 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
     await connect_to_mongo()
-    # Load Slack webhook from DB if set
+    # Load settings from DB
     from app.core.database import get_database
     from app.services.slack_service import slack_service
+    from app.services.partner_ai_service import partner_ai_service
     try:
         db = get_database()
         doc = await db.platform_settings.find_one({"_id": "platform"})
-        if doc and doc.get("slack_webhook_url"):
-            slack_service.set_webhook(doc["slack_webhook_url"])
+        if doc:
+            if doc.get("slack_webhook_url"):
+                slack_service.set_webhook(doc["slack_webhook_url"])
+            ai_cfg = doc.get("partner_ai_config") or {}
+            if ai_cfg.get("system_prompt"):
+                partner_ai_service._system_prompt = ai_cfg["system_prompt"]
+            if ai_cfg.get("name_synonyms"):
+                partner_ai_service._name_synonyms = ai_cfg["name_synonyms"]
     except Exception as e:
-        logger.debug(f"Could not load Slack settings: {e}")
+        logger.debug(f"Could not load settings: {e}")
     logger.info("Application started")
     yield
     # Shutdown

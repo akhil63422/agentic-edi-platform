@@ -3,6 +3,7 @@ Partner AI API endpoints for chat, voice, and document processing
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
 from typing import Dict, Any, List, Optional
+from pydantic import BaseModel
 import logging
 from app.services.partner_ai_service import partner_ai_service
 from app.core.database import get_database
@@ -12,6 +13,40 @@ from app.api.v1.dependencies import require_operator, get_optional_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/partners/ai", tags=["partner-ai"])
+
+
+@router.get("/config")
+async def get_partner_ai_config(db=Depends(get_database)):
+    """Get customizable Partner AI config (prompt, synonyms)"""
+    doc = await db.platform_settings.find_one({"_id": "platform"})
+    config = doc.get("partner_ai_config") or {}
+    return {
+        "system_prompt": config.get("system_prompt") or None,
+        "name_synonyms": config.get("name_synonyms") or {"one word": "oneworld"},
+    }
+
+
+class PartnerAIConfigUpdate(BaseModel):
+    system_prompt: Optional[str] = None
+    name_synonyms: Optional[Dict[str, str]] = None
+
+
+@router.patch("/config")
+async def update_partner_ai_config(update: PartnerAIConfigUpdate, db=Depends(get_database)):
+    """Update Partner AI config - customizable prompts and name mappings"""
+    from app.services.partner_ai_service import partner_ai_service
+    doc = await db.platform_settings.find_one({"_id": "platform"}) or {}
+    config = doc.get("partner_ai_config") or {}
+    if update.system_prompt is not None:
+        config["system_prompt"] = update.system_prompt
+        partner_ai_service._system_prompt = update.system_prompt
+    if update.name_synonyms is not None:
+        config["name_synonyms"] = update.name_synonyms
+        partner_ai_service._name_synonyms = update.name_synonyms
+    doc["partner_ai_config"] = config
+    doc["_id"] = "platform"
+    await db.platform_settings.update_one({"_id": "platform"}, {"$set": doc}, upsert=True)
+    return {"system_prompt": config.get("system_prompt"), "name_synonyms": config.get("name_synonyms")}
 
 
 @router.get("/status")

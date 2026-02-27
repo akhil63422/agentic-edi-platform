@@ -49,7 +49,9 @@ class PartnerAIService:
         self.chat_model_name = "Qwen/Qwen2.5-7B-Instruct"
         self.whisper_model_name = "openai/whisper-base"
         self.document_model_name = "microsoft/layoutlmv3-base"
-        
+        self._system_prompt = None
+        self._name_synonyms = {"one word": "oneworld"}
+
         if not HAS_GPU:
             logger.info("PartnerAIService: No GPU detected, using rule-based extraction (skipping large model loading)")
         else:
@@ -108,77 +110,65 @@ class PartnerAIService:
         context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        Process chat message using conversational AI model
-        
-        Args:
-            message: User's message
-            conversation_history: Previous conversation messages
-            context: Additional context about partner setup
-            
-        Returns:
-            Dict with response and extracted information
+        Process chat message - uses context-aware responses so the right field is acknowledged.
+        When current_question is set, always use rule-based response to avoid wrong acknowledgments.
         """
+        current_question = (context or {}).get("current_question", "")
+        # When we know the current field, use rule-based for correct acknowledgment (e.g. "Partner code X registered")
+        if current_question:
+            rule_result = self._extract_info_rule_based(message, context)
+            if HF_AVAILABLE and self.chat_model:
+                try:
+                    self._load_chat_model()
+                    if self.chat_model:
+                        ai_extracted = self._extract_partner_info(message, "", context)
+                        for k, v in (ai_extracted or {}).items():
+                            if v and not rule_result.get("extracted_data", {}).get(k):
+                                rule_result.setdefault("extracted_data", {})[k] = v
+                except Exception:
+                    pass
+            return rule_result
+
         try:
             if not HF_AVAILABLE:
                 return self._extract_info_rule_based(message, context)
-            
             self._load_chat_model()
-            
             if self.chat_model is None:
                 return self._extract_info_rule_based(message, context)
-            
-            # Build conversation prompt
-            system_prompt = """You are an AI assistant helping to set up a trading partner for an EDI system.
-Extract relevant information from the conversation and respond naturally.
-Focus on: business name, partner code, role (Customer/Supplier/Both), industry, country, timezone, contacts, EDI standards, document types.
-Be conversational and guide the user through the setup process."""
-            
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ]
-            
+
+            system_prompt = getattr(self, "_system_prompt", None) or (
+                "You are an AI assistant helping to set up a trading partner for an EDI system. "
+                "Extract: business name, partner code, role, industry, country, timezone, contacts. "
+                "Be conversational and guide the user."
+            )
+            messages = [{"role": "system", "content": system_prompt}]
             if conversation_history:
                 messages.extend(conversation_history)
-            
             messages.append({"role": "user", "content": message})
-            
-            # Format messages for the model
-            if hasattr(self.chat_tokenizer, 'apply_chat_template'):
+
+            if hasattr(self.chat_tokenizer, "apply_chat_template"):
                 prompt = self.chat_tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True
+                    messages, tokenize=False, add_generation_prompt=True
                 )
             else:
-                # Fallback formatting
                 prompt = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-            
-            # Generate response
+
             inputs = self.chat_tokenizer(prompt, return_tensors="pt").to(self.device)
-            
             with torch.no_grad():
                 outputs = self.chat_model.generate(
                     **inputs,
                     max_new_tokens=256,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.chat_tokenizer.eos_token_id
+                    pad_token_id=self.chat_tokenizer.eos_token_id,
                 )
-            
-            response_text = self.chat_tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
-            
-            # Extract structured information
+            response_text = self.chat_tokenizer.decode(
+                outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+            )
             extracted_data = self._extract_partner_info(message, response_text, context)
-            
-            return {
-                "response": response_text.strip(),
-                "extracted_data": extracted_data,
-                "confidence": 0.85
-            }
-            
+            return {"response": response_text.strip(), "extracted_data": extracted_data, "confidence": 0.85}
         except Exception as e:
             logger.error(f"Error processing chat message: {e}")
-            # Fallback to rule-based
             return self._extract_info_rule_based(message, context)
     
     async def process_voice_input(
@@ -304,27 +294,45 @@ Be conversational and guide the user through the setup process."""
         """Extract structured partner information from text"""
         extracted = {}
         text_lower = text.lower()
-        
-        # Extract business name
+        text_clean = re.sub(r"\s+", " ", text).strip()
+
+        # Extract business name - natural language patterns first
         if not extracted.get("business_name"):
-            # Look for common patterns
-            patterns = [
-                r"business name[:\s]+([A-Z][a-zA-Z\s&.,]+)",
-                r"company[:\s]+([A-Z][a-zA-Z\s&.,]+)",
-                r"legal name[:\s]+([A-Z][a-zA-Z\s&.,]+)",
+            nl_patterns = [
+                r"add\s+(.+?)\s+as\s+(?:a\s+)?trading\s+partner",
+                r"add\s+(.+?)\s+as\s+(?:a\s+)?partner",
+                r"need\s+to\s+add\s+(.+?)\s+as\s+(?:a\s+)?trading\s+partner",
+                r"i\s+want\s+to\s+add\s+(.+?)\s+as",
+                r"(?:add|register)\s+([A-Za-z0-9\s&.-]+?)\s+(?:as|as a)",
             ]
-            import re
-            for pattern in patterns:
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    extracted["business_name"] = match.group(1).strip()
+            for pat in nl_patterns:
+                match = re.search(pat, text, re.IGNORECASE)
+            if match:
+                name = match.group(1).strip()
+                if len(name) > 1 and name.lower() not in ("a", "the", "it"):
+                    name_lower = name.lower()
+                    synonyms = getattr(self, "_name_synonyms", None) or {"one word": "oneworld"}
+                    name = synonyms.get(name_lower, name)
+                    extracted["business_name"] = name.title() if name.islower() else name
                     break
-        
+            if not extracted.get("business_name"):
+                for pat in [
+                    r"business name[:\s]+([A-Za-z0-9\s&.,]+)",
+                    r"company[:\s]+([A-Za-z0-9\s&.,]+)",
+                    r"legal name[:\s]+([A-Za-z0-9\s&.,]+)",
+                ]:
+                    match = re.search(pat, text, re.IGNORECASE)
+                    if match:
+                        extracted["business_name"] = match.group(1).strip()
+                        break
+
         # Extract partner code
         if not extracted.get("partner_code"):
-            match = re.search(r"partner code[:\s]+([A-Z0-9]{1,10})", text, re.IGNORECASE)
+            match = re.search(r"partner code[:\s]+([A-Za-z0-9\s]{1,15})", text, re.IGNORECASE)
             if match:
-                extracted["partner_code"] = match.group(1).strip().upper()
+                code = re.sub(r"\s+", "", match.group(1))[:10]
+                if code:
+                    extracted["partner_code"] = code.upper()
         
         # Extract role
         if "customer" in text_lower and "supplier" in text_lower:
@@ -374,9 +382,11 @@ Be conversational and guide the user through the setup process."""
         answer = message.strip()
         
         if current_question == "businessName" and answer and not extracted.get("business_name"):
-            extracted["business_name"] = answer
+            extracted["business_name"] = answer.strip()
         elif current_question == "partnerCode" and answer and not extracted.get("partner_code"):
-            extracted["partner_code"] = answer.upper()
+            code = re.sub(r"\s+", "", answer)[:10]
+            if code:
+                extracted["partner_code"] = code.upper()
         elif current_question == "role" and answer:
             extracted["role"] = answer
         elif current_question == "industry" and answer:
@@ -384,13 +394,19 @@ Be conversational and guide the user through the setup process."""
         elif current_question == "country" and answer:
             extracted["country"] = answer
         
+        display_answer = answer
+        if current_question == "partnerCode" and extracted.get("partner_code"):
+            display_answer = extracted["partner_code"]
+        elif current_question == "businessName" and extracted.get("business_name"):
+            display_answer = extracted["business_name"]
+
         responses = {
-            "businessName": f"Got it! I've noted the business name: **{answer}**.",
-            "partnerCode": f"Partner code **{answer.upper()}** registered.",
-            "role": f"Role set to **{answer}**.",
-            "industry": f"Industry: **{answer}**. Noted!",
-            "country": f"Location: **{answer}**.",
-            "timezone": f"Timezone set to **{answer}**.",
+            "businessName": f"Got it! I've noted the business name: **{display_answer}**.",
+            "partnerCode": f"Partner code **{display_answer}** registered.",
+            "role": f"Role set to **{display_answer}**.",
+            "industry": f"Industry: **{display_answer}**. Noted!",
+            "country": f"Location: **{display_answer}**.",
+            "timezone": f"Timezone set to **{display_answer}**.",
             "businessContactName": f"Business contact: **{answer}**.",
             "businessContactEmail": f"Email noted: **{answer}**.",
             "businessContactPhone": f"Phone recorded.",
@@ -405,7 +421,7 @@ Be conversational and guide the user through the setup process."""
             "transportType": f"Transport method: **{answer}**.",
         }
         
-        response = responses.get(current_question, f"Got it! **{answer}** noted.")
+        response = responses.get(current_question, f"Got it! **{display_answer}** noted.")
         
         return {
             "response": response,
