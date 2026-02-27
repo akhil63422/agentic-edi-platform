@@ -37,28 +37,25 @@ export const TradingPartners = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await partnersService.getAll({ limit: 1000 });
-      
-      // Ensure response is an array
+      // Load partners and exceptions in parallel (exceptions optional - don't block on failure)
+      const [partnersResult, exceptionsResult] = await Promise.allSettled([
+        partnersService.getAll({ limit: 1000 }),
+        exceptionsService.getAll({ limit: 1000, skip: 0 }),
+      ]);
+      if (partnersResult.status === 'rejected') throw partnersResult.reason;
+      const response = partnersResult.value;
+      const allExceptions = exceptionsResult.status === 'fulfilled' ? exceptionsResult.value : [];
       const data = Array.isArray(response) ? response : [];
       
-      // Fetch exception counts for all partners
       let exceptionCountsMap = {};
-      try {
-        const allExceptions = await exceptionsService.getAll({ limit: 1000, skip: 0 });
-        // Group exceptions by partner_code
-        if (Array.isArray(allExceptions)) {
-          exceptionCountsMap = allExceptions.reduce((acc, exc) => {
-            const partnerCode = exc.partner_code;
-            if (partnerCode) {
-              acc[partnerCode] = (acc[partnerCode] || 0) + 1;
-            }
-            return acc;
-          }, {});
-        }
-      } catch (err) {
-        console.warn('Failed to load exception counts:', err);
-        // Continue without exception counts
+      if (Array.isArray(allExceptions)) {
+        exceptionCountsMap = allExceptions.reduce((acc, exc) => {
+          const partnerCode = exc.partner_code;
+          if (partnerCode) {
+            acc[partnerCode] = (acc[partnerCode] || 0) + 1;
+          }
+          return acc;
+        }, {});
       }
       
       const transformedPartners = data

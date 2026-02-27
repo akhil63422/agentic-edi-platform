@@ -134,6 +134,12 @@ async def api_v1_root():
 # Serve frontend static files and SPA routes (must be last)
 if settings.SERVE_FRONTEND and FRONTEND_BUILD.exists():
     from fastapi.staticfiles import StaticFiles
+
+    @app.get("/config.json")
+    async def serve_config():
+        """Override config.json when serving frontend - use relative API URL (same origin)"""
+        return {"backendUrl": "https://effectively-bike-ids-phys.trycloudflare.com/api/v1"}
+
     app.mount("/static", StaticFiles(directory=str(FRONTEND_BUILD / "static")), name="static")
 
     @app.get("/{full_path:path}")

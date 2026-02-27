@@ -8,7 +8,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 second timeout
+  timeout: 60000, // 60 second timeout (cloud cold start can be slow)
 });
 
 // Load runtime config (config.json) - allows changing backend URL without rebuild

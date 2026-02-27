@@ -6,23 +6,26 @@ When you see **"Error loading partners: timeout of 30000ms exceeded"** or **"Con
 
 ## Full reset (run this first)
 
-On vast.ai, run this to pull latest code, restart MongoDB + backend, and seed sample data:
+On vast.ai, run this to pull latest code, rebuild frontend, restart MongoDB + backend, and seed sample data:
 
 ```bash
 cd /workspace/agentic-edi-platform
 git pull origin main
+cd frontend && npm run build && cd ..
 chmod +x scripts/start-vast-ai.sh
 ./scripts/start-vast-ai.sh --seed
 ```
 
 Use `--seed` to populate sample partners/documents. Omit it if you already have data.
 
+> **Frontend rebuild** is needed after pull so the 60s API timeout and other fixes take effect.
+
 **To run in background:**
 ```bash
 cd /workspace/agentic-edi-platform
 git pull origin main
-./scripts/start-vast-ai.sh --seed &
-# Or: nohup ./scripts/start-vast-ai.sh --seed > /workspace/backend.log 2>&1 &
+cd frontend && npm run build && cd ..
+nohup ./scripts/start-vast-ai.sh --seed > /workspace/backend.log 2>&1 &
 ```
 
 ---
