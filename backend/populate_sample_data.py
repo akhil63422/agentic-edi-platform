@@ -2,7 +2,7 @@
 Script to populate the database with sample data for all tables
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import random
@@ -53,8 +53,8 @@ SAMPLE_PARTNERS = [
                 "acknowledgment_required": True
             }
         ],
-        "created_at": datetime.utcnow() - timedelta(days=30),
-        "updated_at": datetime.utcnow() - timedelta(days=1)
+        "created_at": datetime.now(timezone.utc) - timedelta(days=30),
+        "updated_at": datetime.now(timezone.utc) - timedelta(days=1)
     },
     {
         "business_name": "Target Corporation",
@@ -83,8 +83,8 @@ SAMPLE_PARTNERS = [
                 "frequency": "Daily"
             }
         ],
-        "created_at": datetime.utcnow() - timedelta(days=25),
-        "updated_at": datetime.utcnow() - timedelta(hours=5)
+        "created_at": datetime.now(timezone.utc) - timedelta(days=25),
+        "updated_at": datetime.now(timezone.utc) - timedelta(hours=5)
     },
     {
         "business_name": "Amazon.com",
@@ -115,8 +115,8 @@ SAMPLE_PARTNERS = [
                 "direction": "Inbound"
             }
         ],
-        "created_at": datetime.utcnow() - timedelta(days=20),
-        "updated_at": datetime.utcnow() - timedelta(hours=2)
+        "created_at": datetime.now(timezone.utc) - timedelta(days=20),
+        "updated_at": datetime.now(timezone.utc) - timedelta(hours=2)
     },
     {
         "business_name": "Home Depot",
@@ -139,8 +139,8 @@ SAMPLE_PARTNERS = [
                 "direction": "Inbound"
             }
         ],
-        "created_at": datetime.utcnow() - timedelta(days=10),
-        "updated_at": datetime.utcnow() - timedelta(days=3)
+        "created_at": datetime.now(timezone.utc) - timedelta(days=10),
+        "updated_at": datetime.now(timezone.utc) - timedelta(days=3)
     },
     {
         "business_name": "Costco Wholesale",
@@ -150,8 +150,8 @@ SAMPLE_PARTNERS = [
         "country": "USA",
         "timezone": "America/Los_Angeles",
         "status": "Draft",
-        "created_at": datetime.utcnow() - timedelta(days=5),
-        "updated_at": datetime.utcnow() - timedelta(days=5)
+        "created_at": datetime.now(timezone.utc) - timedelta(days=5),
+        "updated_at": datetime.now(timezone.utc) - timedelta(days=5)
     }
 ]
 
@@ -192,7 +192,7 @@ async def populate_data():
         
         # Create timestamps
         days_ago = random.randint(0, 7)
-        received_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        received_at = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=random.randint(0, 23))
         processed_at = received_at + timedelta(minutes=random.randint(1, 30)) if status == "Completed" else None
         
         doc = {
@@ -238,7 +238,7 @@ async def populate_data():
         severity = random.choice(severities)
         status = random.choice(exception_statuses)
         
-        created_at = datetime.utcnow() - timedelta(days=random.randint(0, 5), hours=random.randint(0, 23))
+        created_at = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 5), hours=random.randint(0, 23))
         resolved_at = created_at + timedelta(hours=random.randint(1, 48)) if status == "Resolved" else None
         
         exception = {
@@ -288,7 +288,7 @@ async def populate_data():
             if exc:
                 entity_id = str(exc["_id"])
         
-        created_at = datetime.utcnow() - timedelta(days=random.randint(0, 7), hours=random.randint(0, 23))
+        created_at = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 7), hours=random.randint(0, 23))
         
         audit_log = {
             "action_type": action_type,
