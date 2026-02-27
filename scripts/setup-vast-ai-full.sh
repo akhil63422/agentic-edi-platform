@@ -21,8 +21,8 @@ mkdir -p "$MONGODB_DATA"
 rm -f "$MONGODB_DATA/mongod.lock" 2>/dev/null
 pkill -9 mongod 2>/dev/null || true
 sleep 1
-mongod --fork --logpath /tmp/mongod.log --dbpath "$MONGODB_DATA" --bind_ip 127.0.0.1 --smallfiles 2>/dev/null || \
-  mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data --bind_ip 127.0.0.1 --smallfiles 2>/dev/null || true
+mongod --fork --logpath /tmp/mongod.log --dbpath "$MONGODB_DATA" --bind_ip 127.0.0.1 2>/dev/null || \
+  mongod --fork --logpath /tmp/mongod.log --dbpath /tmp/mongodb_data --bind_ip 127.0.0.1 2>/dev/null || true
 sleep 2
 
 # 2. Clone repo
