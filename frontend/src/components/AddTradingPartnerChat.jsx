@@ -245,7 +245,10 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
         const transcript = event.results[0][0].transcript;
         if (transcript?.trim()) {
           setInputValue(transcript);
-          setTimeout(() => handleAnswer(transcript).catch(console.error), 100);
+          const idx = currentQuestionIndexRef.current;
+          const normalizedText = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question]?.id === 'partnerCode'
+            ? normalizePartnerCode(transcript) : transcript;
+          setTimeout(() => handleAnswer(normalizedText || transcript, idx).catch(console.error), 100);
         }
         setIsListening(false);
       };
