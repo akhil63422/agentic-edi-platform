@@ -40,14 +40,17 @@ pip install --no-cache-dir -r requirements-vast.txt
 ## If torch/transformers still conflict
 
 ```bash
+cd /workspace/agentic-edi-platform/backend
 pip install --no-cache-dir 'torch==2.9.1' 'transformers>=4.56.0,<5' \
   --index-url https://download.pytorch.org/whl/cu121
+pip install --no-cache-dir -r requirements-vast.txt
 ```
 
-Then reinstall EDI deps:
+If cu121 fails (e.g. no matching wheel), try cu124 or cu129:
 
 ```bash
-pip install --no-cache-dir -r requirements-vast.txt
+pip install --no-cache-dir 'torch==2.9.1' 'transformers>=4.56.0,<5' \
+  --index-url https://download.pytorch.org/whl/cu124
 ```
 
 ## Rule of thumb
