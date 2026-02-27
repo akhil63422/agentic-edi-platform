@@ -11,8 +11,8 @@ const api = axios.create({
   timeout: 60000, // 60 second timeout (cloud cold start can be slow)
 });
 
-// Load runtime config (config.json) - allows changing backend URL without rebuild
-const configReady = fetch('/config.json')
+// Load runtime config (config.json) - cache-bust to avoid stale localhost config
+const configReady = fetch(`/config.json?t=${Date.now()}`)
   .then((r) => (r.ok ? r.json() : null))
   .then((c) => {
     if (c?.backendUrl) api.defaults.baseURL = c.backendUrl;

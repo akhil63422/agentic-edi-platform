@@ -138,7 +138,10 @@ if settings.SERVE_FRONTEND and FRONTEND_BUILD.exists():
     @app.get("/config.json")
     async def serve_config():
         """Override config.json when serving frontend - use relative API URL (same origin)"""
-        return {"backendUrl": "https://effectively-bike-ids-phys.trycloudflare.com/api/v1"}
+        return JSONResponse(
+            content={"backendUrl": "/api/v1"},
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+        )
 
     app.mount("/static", StaticFiles(directory=str(FRONTEND_BUILD / "static")), name="static")
 
