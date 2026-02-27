@@ -144,17 +144,19 @@ pip install -r requirements.txt
 
 ### Option B: If Your Instance Uses vLLM Image
 
-The vLLM image has Python and CUDA. You can run our backend alongside:
+The vLLM image has Python, CUDA, torch, and transformers. Use `requirements-vast.txt` (not `requirements.txt`) to avoid conflicts:
 
 ```bash
 # SSH in, then:
 cd /workspace
 git clone https://github.com/akhil63422/agentic-edi-platform.git
 cd agentic-edi-platform/backend
-pip install -r requirements.txt  # May need: pip install torch first
+pip install -r requirements-vast.txt   # Compatible with vLLM's fastapi/openai/pydantic
 # Create .env, then:
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
+
+If you already ran `requirements.txt` and broke vLLM, see [VAST_AI_DEPENDENCY_FIX.md](VAST_AI_DEPENDENCY_FIX.md).
 
 ### Option C: Use Docker (new instance with custom image)
 
