@@ -13,7 +13,7 @@ This document describes how to improve the Partner Setup voice AI for better acc
 - **Partner code normalization**: `normalizePartnerCode()` handles "one two three" → "123", "12 34 56" → "123456"
 
 ### Backend (partner_ai_service.py)
-- **Whisper** (openai/whisper-base): Speech-to-text on GPU
+- **Whisper** (openai/whisper-small by default): Speech-to-text on GPU. Set `WHISPER_MODEL=openai/whisper-medium` for even better accuracy (more VRAM).
 - **Rule-based extraction**: `_extract_info_rule_based()` with `_normalize_voice_option()` for option matching
 - **Context-aware**: Uses `current_question` to apply correct extraction rules
 
@@ -33,7 +33,9 @@ This document describes how to improve the Partner Setup voice AI for better acc
 | version | "5010", "4010" | Matched to options |
 | transportType | "SFTP", "S3", "FTP", "AS2" | Matched to options |
 | documents | "850 and 810", "850, 856" | Multi-select matching |
-| Contact fields | Names, emails, phone numbers | Free text |
+| Contact fields | Names, emails, phone numbers | Free text; email/phone normalized |
+| businessContactEmail | "akhil6390 at gmail.com", "user a gmail dot com" | `a`/`at` → `@`, `dot` → `.` |
+| businessContactPhone | "one two three four five six seven eight" | Spoken digits → numbers |
 
 ---
 
@@ -52,7 +54,15 @@ For domain-specific terms (EDI, partner codes, X12):
 - Include accents and variations ("ex twelve", "s f t p", "eight fifty")
 - Use Wav2Vec2 or Whisper fine-tuning scripts
 
-### 2. Add Custom Vocabulary (Simpler)
+### 2. Add Custom Name/Email Corrections
+For persistent misrecognitions (e.g. "aunty" → "akhil"), add to backend:
+
+```python
+VOICE_CORRECTIONS = {"aunty": "akhil", "aunty": "aali"}  # word: replacement
+# Apply before email normalization
+```
+
+### 3. Add Custom Vocabulary (Simpler)
 Extend `_normalize_voice_option()` and `matchVoiceToOptions()` with synonyms:
 
 ```python

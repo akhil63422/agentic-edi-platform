@@ -47,7 +47,7 @@ class PartnerAIService:
         self.document_qa_model = None
         
         self.chat_model_name = "Qwen/Qwen2.5-7B-Instruct"
-        self.whisper_model_name = "openai/whisper-base"
+        self.whisper_model_name = os.getenv("WHISPER_MODEL", "openai/whisper-small")  # small > base for accuracy
         self.document_model_name = "microsoft/layoutlmv3-base"
         self._system_prompt = None
         self._name_synonyms = {"one word": "oneworld"}
@@ -304,6 +304,28 @@ class PartnerAIService:
         code = "".join(result)[:10]
         return code.upper() if code else ""
 
+    def _normalize_email_voice(self, text: str) -> str:
+        """Fix common voice misrecognitions for email: 'a'/'at' -> '@', 'dot' -> '.'"""
+        if not text or not isinstance(text, str):
+            return text
+        t = text.strip()
+        m = re.search(r"^(.+?)\s+(?:a|at)\s+(\w+(?:\.\w+)*)\s*$", t, re.IGNORECASE)
+        if m:
+            local = re.sub(r"\s+", "", m.group(1))
+            domain = re.sub(r"\s+", "", m.group(2))
+            return f"{local}@{domain}"
+        return re.sub(r"\s+", "", t)
+
+    def _normalize_phone_voice(self, text: str) -> str:
+        """Convert spoken digits to phone number."""
+        words = {"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+                 "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9", "oh": "0"}
+        parts = re.split(r"\s+", text.strip().lower())
+        out = []
+        for p in parts:
+            out.append(words.get(p, re.sub(r"\D", "", p)))
+        return "".join(out)[:20] or text
+
     def _normalize_voice_option(self, text: str, options: list) -> str:
         """Match voice input to valid option (e.g. 'customer' -> 'Customer', 's f t p' -> 'SFTP')."""
         if not text or not options:
@@ -448,6 +470,12 @@ class PartnerAIService:
             extracted["version"] = self._normalize_voice_option(answer, ["5010", "4010", "3060"])
         elif current_question == "transportType" and answer:
             extracted["transportType"] = self._normalize_voice_option(answer, ["SFTP", "S3", "FTP", "AS2"])
+        elif current_question in ("businessContactName", "technicalContactName") and answer:
+            extracted["name"] = answer.strip()
+        elif current_question in ("businessContactEmail", "technicalContactEmail") and answer:
+            extracted["email"] = self._normalize_email_voice(answer)
+        elif current_question in ("businessContactPhone", "technicalContactPhone") and answer:
+            extracted["phone"] = self._normalize_phone_voice(answer)
         
         display_answer = answer
         if current_question == "partnerCode" and extracted.get("partner_code"):

@@ -9,12 +9,41 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { partnerAIService } from '@/services/partnerAI';
 
+const DIGIT_WORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', oh: '0' };
+
 // Normalize voice input for partner code (handles "1 2 3", "one two three", etc.)
 const normalizePartnerCode = (text) => {
-  const words = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', oh: '0' };
   const parts = String(text || '').trim().toLowerCase().split(/\s+/);
-  const result = parts.map((p) => words[p] ?? p.replace(/\D/g, '')).join('');
+  const result = parts.map((p) => DIGIT_WORDS[p] ?? p.replace(/\D/g, '')).join('');
   return result.slice(0, 10).toUpperCase() || text.replace(/\s/g, '').slice(0, 10).toUpperCase();
+};
+
+// Common voice→text corrections for email (e.g. "aunty" often misheard for "akhil")
+const EMAIL_VOICE_CORRECTIONS = { aunty: 'akhil', aali: 'akhil' };
+
+// Normalize voice for email - fix "aunty 6390 a gmail.com" → "akhil6390@gmail.com" (at/a → @, dot → .)
+const normalizeEmailForVoice = (text) => {
+  if (!text?.trim()) return text;
+  let t = String(text).trim();
+  t = t.replace(/\s+dot\s+/gi, '.').replace(/\s+at\s+/gi, ' @ ');
+  const match = t.match(/^(.+?)\s+(?:a|at)\s+(\w+(?:\.\w+)*)$/i);
+  if (match) {
+    let local = match[1].replace(/\s/g, '');
+    const domain = match[2].replace(/\s/g, '');
+    Object.entries(EMAIL_VOICE_CORRECTIONS).forEach(([wrong, right]) => {
+      local = local.replace(new RegExp(wrong, 'gi'), right);
+    });
+    return `${local}@${domain}`;
+  }
+  return t.replace(/\s/g, '').replace(/\.+/g, '.');
+};
+
+// Normalize voice for phone - "one two three four five six seven eight nine zero" → digits
+const normalizePhoneForVoice = (text) => {
+  if (!text?.trim()) return text;
+  const parts = String(text).trim().toLowerCase().split(/\s+/);
+  const result = parts.map((p) => DIGIT_WORDS[p] ?? p.replace(/\D/g, '')).join('');
+  return result.slice(0, 20) || text.replace(/\s/g, '').replace(/\D/g, '').slice(0, 20) || text;
 };
 
 // Match voice input to multi-select options (e.g. "customer" -> "Customer", "america new york" -> "America/New_York")
@@ -268,6 +297,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
           const q = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question];
           let answerText = transcript.trim();
           if (q?.id === 'partnerCode') answerText = normalizePartnerCode(answerText) || answerText;
+          else if (/Email|email/i.test(q?.id || '')) answerText = normalizeEmailForVoice(answerText) || answerText;
+          else if (/Phone|phone/i.test(q?.id || '')) answerText = normalizePhoneForVoice(answerText) || answerText;
           else if (q?.options?.length) {
             const matched = matchVoiceToOptions(answerText, q.options);
             answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
@@ -314,6 +345,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             const q = CONVERSATION_FLOW[idx.section]?.questions[idx.question];
             let answerText = result.text?.trim() || '';
             if (q?.id === 'partnerCode') answerText = normalizePartnerCode(answerText) || answerText;
+            else if (/Email|email/i.test(q?.id || '')) answerText = normalizeEmailForVoice(answerText) || answerText;
+            else if (/Phone|phone/i.test(q?.id || '')) answerText = normalizePhoneForVoice(answerText) || answerText;
             else if (q?.options?.length) {
               const matched = matchVoiceToOptions(answerText, q.options);
               answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
