@@ -80,7 +80,8 @@ async def create_partner(
         partner_dict = partner_data.model_dump()
         partner_dict["created_at"] = datetime.utcnow()
         partner_dict["updated_at"] = datetime.utcnow()
-        
+        partner_dict["status"] = "Draft"
+
         result = await db.trading_partners.insert_one(partner_dict)
         partner = await db.trading_partners.find_one({"_id": result.inserted_id})
         partner["_id"] = str(partner["_id"])

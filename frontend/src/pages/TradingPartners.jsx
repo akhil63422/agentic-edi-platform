@@ -124,6 +124,13 @@ export const TradingPartners = () => {
 
   const handlePartnerCreated = async (partnerData) => {
     try {
+      const businessName = (partnerData.businessName || partnerData.business_name || '').trim();
+      const partnerCode = (partnerData.partnerCode || partnerData.partner_code || '').trim().toUpperCase();
+      if (!businessName || !partnerCode) {
+        toast.error('Business name and partner code are required.');
+        return;
+      }
+
       const hasBusinessContact = partnerData.businessContact &&
         (partnerData.businessContact.name || partnerData.businessContact.email);
       const hasTechnicalContact = partnerData.technicalContact &&
@@ -131,21 +138,21 @@ export const TradingPartners = () => {
       const hasEdiConfig = partnerData.ediStandard || partnerData.ediConfig?.standard;
 
       const apiData = {
-        business_name: partnerData.businessName || partnerData.business_name,
-        partner_code: (partnerData.partnerCode || partnerData.partner_code || '').toUpperCase(),
+        business_name: businessName,
+        partner_code: partnerCode,
         role: partnerData.role || 'Both',
         industry: partnerData.industry || null,
         country: partnerData.country || null,
         timezone: partnerData.timezone || null,
         business_contact: hasBusinessContact ? {
-          name: partnerData.businessContact.name || 'N/A',
-          email: partnerData.businessContact.email || 'N/A',
-          phone: partnerData.businessContact.phone || null,
+          name: (partnerData.businessContact.name || 'N/A').trim() || 'N/A',
+          email: (partnerData.businessContact.email || 'N/A').trim() || 'N/A',
+          phone: partnerData.businessContact.phone?.trim() || null,
         } : null,
         technical_contact: hasTechnicalContact ? {
-          name: partnerData.technicalContact.name || 'N/A',
-          email: partnerData.technicalContact.email || 'N/A',
-          phone: partnerData.technicalContact.phone || null,
+          name: (partnerData.technicalContact.name || 'N/A').trim() || 'N/A',
+          email: (partnerData.technicalContact.email || 'N/A').trim() || 'N/A',
+          phone: partnerData.technicalContact.phone?.trim() || null,
         } : null,
         edi_config: hasEdiConfig ? {
           standard: partnerData.ediStandard || partnerData.ediConfig?.standard || 'X12',
@@ -153,11 +160,10 @@ export const TradingPartners = () => {
           isa_sender_id: partnerData.isaSenderId || partnerData.ediConfig?.isaSenderId || null,
           isa_receiver_id: partnerData.isaReceiverId || partnerData.ediConfig?.isaReceiverId || null,
         } : null,
-        document_agreements: (partnerData.documents || []).map(doc => ({
-          transaction_set: doc.replace(/\s*\(.*\)/, ''),
-          direction: 'Inbound',
-        })),
-        status: partnerData.status || 'Draft',
+        document_agreements: (partnerData.documents || [])
+          .map((doc) => String(doc).replace(/\s*\(.*\)/, '').trim())
+          .filter((ts) => ts.length > 0)
+          .map((transaction_set) => ({ transaction_set, direction: 'Inbound' })),
       };
 
       await partnersService.create(apiData);
@@ -166,8 +172,13 @@ export const TradingPartners = () => {
       await loadPartners();
     } catch (err) {
       console.error('Error creating partner:', err);
-      const detail = err.response?.data?.detail || err.message;
-      toast.error(`Failed to create trading partner: ${detail}`);
+      let detail = err.response?.data?.detail ?? err.message;
+      if (Array.isArray(detail)) {
+        detail = detail.map((e) => e.msg || `${e.loc?.join('.')}: ${e.msg}`).join('; ');
+      } else if (typeof detail === 'object' && detail !== null) {
+        detail = JSON.stringify(detail);
+      }
+      toast.error(`Failed to create trading partner: ${String(detail)}`);
     }
   };
 
