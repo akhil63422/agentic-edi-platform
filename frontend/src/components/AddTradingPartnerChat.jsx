@@ -598,21 +598,38 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     // Process with AI to extract information (non-blocking, don't wait for it)
     setIsProcessing(true);
     
-    // Process AI in background without blocking
+    // Process AI in background without blocking (optional - failures don't block flow)
     (async () => {
       try {
         const conversationHistory = messages
           .filter(m => m.type === 'user' || m.type === 'ai')
           .map(m => ({
             role: m.type === 'user' ? 'user' : 'assistant',
-            content: m.content
+            content: String(m.content || '')
           }))
           .slice(-10);
 
+        // Sanitize context - only plain serializable values (avoids 422)
+        const safeFormData = {};
+        try {
+          Object.keys(formData || {}).forEach((k) => {
+            const v = formData[k];
+            if (v !== undefined && v !== null && typeof v !== 'function') {
+              if (typeof v === 'object' && !Array.isArray(v) && v.constructor?.name !== 'Object') return;
+              safeFormData[k] = v;
+            }
+          });
+        } catch (_) {}
+        const context = {
+          current_section: currentSection.section,
+          current_question: currentQuestion.id,
+          form_data: safeFormData,
+        };
+
         const result = await partnerAIService.processChat(
-          answer,
+          String(answer || ''),
           conversationHistory,
-          { current_section: currentSection.section, current_question: currentQuestion.id, form_data: formData }
+          context
         );
 
         if (result && result.success && result.extracted_data) {
@@ -760,7 +777,6 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     }]);
 
     try {
-      // Ensure formData has all required fields with defaults
       const finalData = {
         ...formData,
         status: formData.status || 'Draft',
@@ -777,10 +793,23 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
         monitoringEnabled: formData.monitoringEnabled !== undefined ? formData.monitoringEnabled : true,
       };
       
-      // Optionally save via AI service endpoint (which validates and stores)
-      // await partnerAIService.savePartner(finalData);
+      const result = await onComplete(finalData);
       
-      await onComplete(finalData);
+      if (result?.success) {
+        const successMsg = "Trading partner added successfully! Your partner has been saved to the database.";
+        setMessages(prev => [...prev, {
+          id: `success-${Date.now()}`,
+          type: 'ai',
+          content: `✅ ${successMsg}`,
+        }]);
+        if (voiceMode && 'speechSynthesis' in window) {
+          const u = new SpeechSynthesisUtterance(successMsg);
+          u.rate = 0.95;
+          u.lang = 'en-US';
+          window.speechSynthesis.speak(u);
+        }
+        setTimeout(() => onClose?.(), 2500);
+      }
     } catch (error) {
       console.error('Error completing partner setup:', error);
       toast.error('Error saving partner. Please try again.');

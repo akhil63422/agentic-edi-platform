@@ -168,8 +168,8 @@ export const TradingPartners = () => {
 
       await partnersService.create(apiData);
       toast.success('Trading partner added successfully!');
-      setShowWizard(false);
       await loadPartners();
+      return { success: true };
     } catch (err) {
       console.error('Error creating partner:', err);
       let detail = err.response?.data?.detail ?? err.message;
@@ -179,6 +179,7 @@ export const TradingPartners = () => {
         detail = JSON.stringify(detail);
       }
       toast.error(`Failed to create trading partner: ${String(detail)}`);
+      return { success: false, error: String(detail) };
     }
   };
 
