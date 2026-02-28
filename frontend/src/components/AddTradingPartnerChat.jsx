@@ -721,8 +721,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       // Optionally save via AI service endpoint (which validates and stores)
       // await partnerAIService.savePartner(finalData);
       
-      onComplete(finalData);
-      toast.success('Trading partner created successfully!');
+      await onComplete(finalData);
     } catch (error) {
       console.error('Error completing partner setup:', error);
       toast.error('Error saving partner. Please try again.');
