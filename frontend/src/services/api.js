@@ -15,9 +15,30 @@ const api = axios.create({
 const configReady = fetch(`/config.json?t=${Date.now()}`)
   .then((r) => (r.ok ? r.json() : null))
   .then((c) => {
-    if (c?.backendUrl) api.defaults.baseURL = c.backendUrl;
+    if (c?.backendUrl) {
+      const url = c.backendUrl;
+      if (url.startsWith('/')) {
+        api.defaults.baseURL = url;
+      } else if (typeof window !== 'undefined' && url.startsWith('http')) {
+        try {
+          const configHost = new URL(url).hostname;
+          const currentHost = window.location.hostname;
+          if (configHost !== currentHost && /trycloudflare\.com|ngrok|localhost|127\.0\.0\.1/.test(currentHost)) {
+            api.defaults.baseURL = window.location.origin + '/api/v1';
+          } else {
+            api.defaults.baseURL = url;
+          }
+        } catch {
+          api.defaults.baseURL = window.location.origin + '/api/v1';
+        }
+      } else {
+        api.defaults.baseURL = url;
+      }
+    }
   })
-  .catch(() => {});
+  .catch(() => {
+    if (typeof window !== 'undefined') api.defaults.baseURL = window.location.origin + '/api/v1';
+  });
 
 // Ensure config is loaded before first request (config.json overrides build-time URL)
 api.interceptors.request.use(
