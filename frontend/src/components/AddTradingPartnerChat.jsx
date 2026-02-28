@@ -46,6 +46,41 @@ const normalizePhoneForVoice = (text) => {
   return result.slice(0, 20) || text.replace(/\s/g, '').replace(/\D/g, '').slice(0, 20) || text;
 };
 
+// Preferred female voice names (varies by OS/browser)
+const FEMALE_VOICE_NAMES = [
+  'Samantha', 'Victoria', 'Karen', 'Kate', 'Fiona', 'Tessa', 'Moira', 'Emma',
+  'Microsoft Zira', 'Microsoft Aria', 'Google US English', 'Samantha (Premium)',
+  'Sara', 'Allison', 'Susan', 'Ellen', 'Karen (Enhanced)', 'Ava',
+];
+
+const getFemaleVoice = () => {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const enVoices = voices.filter((v) => v.lang.startsWith('en'));
+  const preferred = enVoices.find((v) =>
+    FEMALE_VOICE_NAMES.some((n) => v.name.toLowerCase().includes(n.toLowerCase()))
+  );
+  if (preferred) return preferred;
+  const femaleLike = enVoices.find((v) =>
+    /samantha|victoria|karen|kate|fiona|zira|aria|sara|emma|susan|ellen|ava|allison|moira|tessa/i.test(v.name)
+  );
+  return femaleLike || enVoices[0] || voices[0];
+};
+
+const speakWithFemaleVoice = (text, onEnd) => {
+  if (!text?.trim() || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const voice = getFemaleVoice();
+  if (voice) u.voice = voice;
+  u.rate = 0.92;
+  u.pitch = 1.1;
+  u.volume = 1;
+  u.lang = 'en-US';
+  if (onEnd) u.onend = onEnd;
+  window.speechSynthesis.speak(u);
+};
+
 // Strip emojis and normalize text for clean TTS output
 const toSpeakableText = (text) => {
   if (!text?.trim()) return '';
@@ -254,7 +289,6 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
   const audioChunksRef = useRef([]);
   const formDataRef = useRef(formData);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
-  const speechUtteranceRef = useRef(null);
   const isProcessingRef = useRef(false);
   formDataRef.current = formData;
   currentQuestionIndexRef.current = currentQuestionIndex;
@@ -271,6 +305,16 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
       }
     };
     if (open) checkAI();
+  }, [open]);
+
+  // Load TTS voices when dialog opens (Chrome loads voices async)
+  useEffect(() => {
+    if (open && 'speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      const onVoicesChanged = () => window.speechSynthesis.getVoices();
+      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+      return () => window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+    }
   }, [open]);
 
   // Initialize conversation
@@ -322,20 +366,10 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     if (last.id?.startsWith('summary-') || last.id?.startsWith('complete-')) return;
     const speakable = last.speak ? last.speak : toSpeakableText(last.content);
     if (!speakable) return;
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(speakable);
-    u.rate = 0.95;
-    u.pitch = 1;
-    u.volume = 1;
-    u.lang = 'en-US';
-    u.onend = () => {
-      // Auto-start listening after TTS ends (small delay for browser)
+    speakWithFemaleVoice(speakable, () => {
       setTimeout(() => startAutoListeningRef.current?.(), 400);
-    };
-    speechUtteranceRef.current = u;
-    window.speechSynthesis.speak(u);
-    return () => window.speechSynthesis.cancel();
+    });
+    return () => window.speechSynthesis?.cancel();
   }, [messages, voiceMode, open]);
 
   // Browser fallback: SpeechRecognition (Chrome)
@@ -802,12 +836,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
           type: 'ai',
           content: `✅ ${successMsg}`,
         }]);
-        if (voiceMode && 'speechSynthesis' in window) {
-          const u = new SpeechSynthesisUtterance(successMsg);
-          u.rate = 0.95;
-          u.lang = 'en-US';
-          window.speechSynthesis.speak(u);
-        }
+        if (voiceMode) speakWithFemaleVoice(successMsg);
         setTimeout(() => onClose?.(), 2500);
       }
     } catch (error) {
