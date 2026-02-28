@@ -46,6 +46,16 @@ const normalizePhoneForVoice = (text) => {
   return result.slice(0, 20) || text.replace(/\s/g, '').replace(/\D/g, '').slice(0, 20) || text;
 };
 
+// Strip emojis and normalize text for clean TTS output
+const toSpeakableText = (text) => {
+  if (!text?.trim()) return '';
+  return String(text)
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '')
+    .replace(/\n+/g, '. ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 // Match voice input to multi-select options (e.g. "customer" -> "Customer", "america new york" -> "America/New_York")
 const matchVoiceToOptions = (text, options = []) => {
   if (!text?.trim() || !options?.length) return null;
@@ -73,6 +83,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'businessName',
         question: "🎮 INITIALIZING PARTNER CONFIGURATION PROTOCOL...\n\nHey there! I'm your AI assistant. Let's set up a new trading partner together! 🚀\n\nFirst, what's the legal business name of the trading partner?",
+        speak: "Hey there! I'm your AI assistant. Let's set up a new trading partner together. First, what's the legal business name of the trading partner?",
         type: 'text',
         required: true,
         placeholder: 'e.g., Walmart Inc.',
@@ -227,7 +238,7 @@ const CONVERSATION_FLOW = [
   },
 ];
 
-export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
+export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = true }) => {
   const [messages, setMessages] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState({ section: 0, question: 0 });
   const [inputValue, setInputValue] = useState('');
@@ -243,6 +254,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const audioChunksRef = useRef([]);
   const formDataRef = useRef(formData);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
+  const speechUtteranceRef = useRef(null);
   formDataRef.current = formData;
   currentQuestionIndexRef.current = currentQuestionIndex;
 
@@ -268,6 +280,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
           id: '1',
           type: 'ai',
           content: firstQuestion.question,
+          speak: firstQuestion.speak,
           questionId: firstQuestion.id,
           questionType: firstQuestion.type,
           options: firstQuestion.options,
@@ -280,6 +293,29 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Voice output (TTS): speak the question when in Voice Assistant mode
+  useEffect(() => {
+    if (!voiceMode || !open || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last?.type !== 'ai' || !last.questionId || !last.content) return;
+    // Skip summary/completion messages
+    if (last.id?.startsWith('summary-') || last.id?.startsWith('complete-')) return;
+    const speakable = last.speak ? last.speak : toSpeakableText(last.content);
+    if (!speakable) return;
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(speakable);
+    u.rate = 0.95;
+    u.pitch = 1;
+    u.volume = 1;
+    u.lang = 'en-US';
+    speechUtteranceRef.current = u;
+    window.speechSynthesis.speak(u);
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [messages, voiceMode, open]);
 
   // Browser fallback: SpeechRecognition (Chrome)
   useEffect(() => {
@@ -314,6 +350,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
 
   const startListening = async () => {
     if (isListening) return;
+    if (voiceMode && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     setIsListening(true);
     toast.info('Listening... Speak now.');
 
@@ -635,6 +672,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
         id: `ai-${Date.now()}`,
         type: 'ai',
         content: nextQ.question,
+        speak: nextQ.speak,
         questionId: nextQ.id,
         questionType: nextQ.type,
         options: nextQ.options,
@@ -1005,26 +1043,28 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
               </motion.div>
             </label>
 
-            {/* Voice Input */}
-            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-              <Button
-                type="button"
-                size="icon"
-                onClick={isListening ? stopListening : startListening}
-                className={`flex-shrink-0 ${
-                  isListening 
-                    ? 'bg-red-600/30 border-2 border-red-500 text-red-400 animate-pulse' 
-                    : 'bg-purple-600/20 border-2 border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:border-purple-400'
-                }`}
-                title={isListening ? 'Stop Recording' : 'Voice Input'}
-              >
-                {isListening ? (
-                  <MicOff className="w-4 h-4" />
-                ) : (
-                  <Mic className="w-4 h-4" />
-                )}
-              </Button>
-            </motion.div>
+            {/* Voice Input - only when voiceMode is enabled */}
+            {voiceMode && (
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={isListening ? stopListening : startListening}
+                  className={`flex-shrink-0 ${
+                    isListening 
+                      ? 'bg-red-600/30 border-2 border-red-500 text-red-400 animate-pulse' 
+                      : 'bg-purple-600/20 border-2 border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:border-purple-400'
+                  }`}
+                  title={isListening ? 'Stop Recording' : 'Voice Input'}
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </Button>
+              </motion.div>
+            )}
 
             {/* Text Input */}
             <Input

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, MoreVertical, CheckCircle2, AlertCircle, Clock, XCircle, Loader2, Eye, Edit, Trash2, Power } from 'lucide-react';
+import { Plus, Search, MoreVertical, CheckCircle2, AlertCircle, Clock, XCircle, Loader2, Eye, Edit, Trash2, Power, Mic, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Avatar,
   AvatarFallback,
 } from '@/components/ui/avatar';
@@ -23,7 +29,9 @@ import { exceptionsService } from '@/services/exceptions';
 
 export const TradingPartners = () => {
   const navigate = useNavigate();
+  const [showModeChoice, setShowModeChoice] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [wizardMode, setWizardMode] = useState('voice'); // 'voice' | 'input'
   const [searchQuery, setSearchQuery] = useState('');
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -274,7 +282,7 @@ export const TradingPartners = () => {
             Manage your EDI trading partner relationships and configurations
           </p>
         </div>
-        <Button onClick={() => setShowWizard(true)} className="gap-2">
+        <Button onClick={() => setShowModeChoice(true)} className="gap-2">
           <Plus className="w-4 h-4" />
           Add Trading Partner
         </Button>
@@ -436,7 +444,7 @@ export const TradingPartners = () => {
               {searchQuery ? 'No partners found matching your search.' : 'No trading partners yet.'}
             </p>
             {!searchQuery && (
-              <Button onClick={() => setShowWizard(true)} className="mt-4" variant="outline">
+              <Button onClick={() => setShowModeChoice(true)} className="mt-4" variant="outline">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Your First Trading Partner
               </Button>
@@ -445,12 +453,57 @@ export const TradingPartners = () => {
         </Card>
       )}
 
+      {/* Mode choice popup */}
+      <Dialog open={showModeChoice} onOpenChange={setShowModeChoice}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Trading Partner</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            Choose how you'd like to add your trading partner:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Button
+              variant="outline"
+              className="h-auto py-6 flex flex-col gap-2 border-2 hover:border-purple-500 hover:bg-purple-500/10"
+              onClick={() => {
+                setWizardMode('voice');
+                setShowModeChoice(false);
+                setShowWizard(true);
+              }}
+            >
+              <Mic className="w-8 h-8 text-purple-400" />
+              <span className="font-semibold">Voice Assistant</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Answer questions using voice
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto py-6 flex flex-col gap-2 border-2 hover:border-cyan-500 hover:bg-cyan-500/10"
+              onClick={() => {
+                setWizardMode('input');
+                setShowModeChoice(false);
+                setShowWizard(true);
+              }}
+            >
+              <Keyboard className="w-8 h-8 text-cyan-400" />
+              <span className="font-semibold">Input</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Type your answers
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Trading Partner Chat */}
       {showWizard && (
         <AddTradingPartnerChat
           open={showWizard}
           onClose={() => setShowWizard(false)}
           onComplete={handlePartnerCreated}
+          voiceMode={wizardMode === 'voice'}
         />
       )}
     </div>

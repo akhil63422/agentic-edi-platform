@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { partnersService } from '@/services/partners';
 import { 
   ArrowLeft, 
   Edit, 
@@ -19,7 +20,8 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Eye,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,161 +39,107 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+const DOC_NAMES = { '850': 'Purchase Order', '810': 'Invoice', '856': 'Advance Ship Notice', '997': 'Functional Acknowledgment' };
+
+const mapApiPartnerToUI = (api) => {
+  if (!api) return null;
+  const bc = api.business_contact;
+  const tc = api.technical_contact;
+  const edi = api.edi_config;
+  const erp = api.erp_context;
+  const docs = api.document_agreements || [];
+  const transport = api.transport_config;
+  const creds = transport?.credentials || {};
+  return {
+    id: api._id || api.id,
+    name: api.business_name || '',
+    code: api.partner_code || '',
+    role: api.role || 'Both',
+    status: api.status || 'Draft',
+    industry: api.industry || null,
+    country: api.country || null,
+    timezone: api.timezone || null,
+    businessContact: bc ? { name: bc.name || '', email: bc.email || '', phone: bc.phone || '' } : { name: '', email: '', phone: '' },
+    technicalContact: tc ? { name: tc.name || '', email: tc.email || '', phone: tc.phone || '' } : { name: '', email: '', phone: '' },
+    ediProfile: edi ? {
+      standard: edi.standard || 'X12',
+      version: edi.version || '5010',
+      functionalGroups: edi.functional_group ? [edi.functional_group] : [],
+      characterSet: edi.character_set || 'UTF-8',
+      delimiters: edi.delimiters || { element: '*', segment: '~', subElement: '>' },
+      isaSenderId: edi.isa_sender_id || '',
+      isaReceiverId: edi.isa_receiver_id || '',
+      gsIds: edi.gs_ids || { sender: '', receiver: '' },
+    } : { standard: 'X12', version: '5010', functionalGroups: [], characterSet: 'UTF-8', delimiters: { element: '*', segment: '~', subElement: '>' }, isaSenderId: '', isaReceiverId: '', gsIds: { sender: '', receiver: '' } },
+    erpContext: erp ? {
+      partnerERP: {
+        system: erp.backend_system || '',
+        version: erp.version || '',
+        hasCustomizations: !!(erp.customizations && erp.customizations.length > 0),
+        notes: erp.notes || '',
+      },
+      targetSystem: { system: erp.backend_system || '', integrationMethod: 'API', dataOwner: '' },
+    } : { partnerERP: { system: '', version: '', hasCustomizations: false, notes: '' }, targetSystem: { system: '', integrationMethod: '', dataOwner: '' } },
+    documents: docs.map((d, i) => ({
+      id: `doc${i}`,
+      transactionSet: d.transaction_set || '',
+      name: (d.transaction_set && DOC_NAMES[d.transaction_set]) || `Transaction ${d.transaction_set || '—'}`,
+      direction: d.direction || 'Inbound',
+      frequency: d.frequency || '—',
+      acknowledgmentRequired: d.acknowledgment_required !== false,
+      sla: d.sla || { deliveryTime: '—', retryRules: '' },
+      status: 'Active',
+    })),
+    transport: transport ? {
+      type: transport.type || 'SFTP',
+      config: {
+        host: creds.host || transport.endpoint || '—',
+        port: creds.port || '22',
+        username: creds.username || '—',
+        path: creds.path || '/',
+        encryption: !!transport.encryption,
+      },
+      schedule: transport.schedule || 'event-driven',
+      autoRetry: true,
+    } : { type: '—', config: { host: '—', port: '—', username: '—', path: '—', encryption: false }, schedule: '—', autoRetry: false },
+    stats: { totalTransactions: 0, successRate: 0, avgProcessingTime: '—', lastTransaction: '—', exceptions: 0 },
+    recentActivity: [],
+    exceptions: [],
+  };
+};
+
 export const PartnerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [partnerData, setPartnerData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock partner data - in real app, this would come from API based on id
-  const partnerData = {
-    id: id || '1',
-    name: 'Walmart Inc.',
-    code: 'WMT',
-    role: 'Customer',
-    status: 'Active',
-    industry: 'Retail',
-    country: 'United States',
-    timezone: 'America/New_York',
-    createdAt: '2024-01-10',
-    activatedAt: '2024-01-15',
-    
-    // Business Contacts
-    businessContact: {
-      name: 'John Doe',
-      email: 'john.doe@walmart.com',
-      phone: '+1 (555) 123-4567',
-    },
-    technicalContact: {
-      name: 'Jane Smith',
-      email: 'jane.smith@walmart.com',
-      phone: '+1 (555) 987-6543',
-    },
-    
-    // EDI Profile
-    ediProfile: {
-      standard: 'X12',
-      version: '5010',
-      functionalGroups: ['PO', 'IN', 'SH'],
-      characterSet: 'UTF-8',
-      delimiters: {
-        element: '*',
-        segment: '~',
-        subElement: '>',
-      },
-      isaSenderId: 'SENDER',
-      isaReceiverId: 'WALMART',
-      gsIds: {
-        sender: 'GS_SENDER',
-        receiver: 'GS_RECEIVER',
-      },
-    },
-    
-    // ERP Context
-    erpContext: {
-      partnerERP: {
-        system: 'SAP',
-        version: 'SAP ECC 6.0',
-        hasCustomizations: true,
-        notes: 'Custom PO processing module',
-      },
-      targetSystem: {
-        system: 'SAP',
-        integrationMethod: 'API',
-        dataOwner: 'Finance Team',
-      },
-    },
-    
-    // Documents
-    documents: [
-      {
-        id: 'doc1',
-        transactionSet: '850',
-        name: 'Purchase Order',
-        direction: 'Inbound',
-        frequency: 'Daily',
-        acknowledgmentRequired: true,
-        sla: { deliveryTime: '2 hours', retryRules: '3 attempts, 30min intervals' },
-        status: 'Active',
-      },
-      {
-        id: 'doc2',
-        transactionSet: '810',
-        name: 'Invoice',
-        direction: 'Outbound',
-        frequency: 'Real-time',
-        acknowledgmentRequired: true,
-        sla: { deliveryTime: '1 hour', retryRules: '3 attempts, 15min intervals' },
-        status: 'Active',
-      },
-      {
-        id: 'doc3',
-        transactionSet: '856',
-        name: 'Advance Ship Notice',
-        direction: 'Inbound',
-        frequency: 'Daily',
-        acknowledgmentRequired: false,
-        sla: { deliveryTime: '4 hours', retryRules: '2 attempts, 1hr intervals' },
-        status: 'Active',
-      },
-    ],
-    
-    // Transport
-    transport: {
-      type: 'SFTP',
-      config: {
-        host: 'sftp.walmart.com',
-        port: '22',
-        username: 'sftp_user',
-        path: '/inbound/edi',
-        encryption: true,
-      },
-      schedule: 'event-driven',
-      autoRetry: true,
-    },
-    
-    // Statistics
-    stats: {
-      totalTransactions: 1234,
-      successRate: 94.2,
-      avgProcessingTime: '2.3 min',
-      lastTransaction: '2 hours ago',
-      exceptions: 0,
-    },
-    
-    // Recent Activity
-    recentActivity: [
-      {
-        id: 'act1',
-        fileId: 'PO_8932',
-        docType: 'X12 850',
-        direction: 'Inbound',
-        status: 'Completed',
-        timestamp: '2024-01-15 10:42',
-        time: '10:42 AM',
-      },
-      {
-        id: 'act2',
-        fileId: 'INV_4521',
-        docType: 'X12 810',
-        direction: 'Outbound',
-        status: 'Completed',
-        timestamp: '2024-01-15 09:35',
-        time: '09:35 AM',
-      },
-      {
-        id: 'act3',
-        fileId: 'ASN_7834',
-        docType: 'X12 856',
-        direction: 'Inbound',
-        status: 'Processing',
-        timestamp: '2024-01-15 08:20',
-        time: '08:20 AM',
-      },
-    ],
-    
-    // Exceptions
-    exceptions: [],
-  };
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      setError('Invalid partner ID');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const api = await partnersService.getById(id);
+        if (!cancelled) setPartnerData(mapApiPartnerToUI(api));
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.detail || err.message || 'Failed to load partner');
+          setPartnerData(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -214,6 +162,33 @@ export const PartnerDetail = () => {
     navigate(`/document/${fileId}`);
   };
 
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+          <p className="text-cyan-300 font-mono">Loading partner...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !partnerData) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+            <p className="text-red-300 font-mono mb-4">{error || 'Partner not found'}</p>
+            <Button onClick={() => navigate('/partners')} variant="outline">
+              Back to Partners
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -231,7 +206,7 @@ export const PartnerDetail = () => {
             <div>
               <h1 className="text-3xl font-bold text-foreground">{partnerData.name}</h1>
               <p className="text-muted-foreground mt-1">
-                Code: {partnerData.code} • {partnerData.role} • {partnerData.industry}
+                Code: {partnerData.code} • {partnerData.role}{partnerData.industry ? ` • ${partnerData.industry}` : ''}
               </p>
             </div>
           </div>
@@ -348,17 +323,17 @@ export const PartnerDetail = () => {
                 <div>
                   <p className="text-sm font-medium mb-2">Business Contact</p>
                   <div className="space-y-1 text-sm">
-                    <p>{partnerData.businessContact.name}</p>
-                    <p className="text-muted-foreground">{partnerData.businessContact.email}</p>
-                    <p className="text-muted-foreground">{partnerData.businessContact.phone}</p>
+                    <p>{partnerData.businessContact?.name || '—'}</p>
+                    <p className="text-muted-foreground">{partnerData.businessContact?.email || '—'}</p>
+                    <p className="text-muted-foreground">{partnerData.businessContact?.phone || '—'}</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-2">Technical Contact</p>
                   <div className="space-y-1 text-sm">
-                    <p>{partnerData.technicalContact.name}</p>
-                    <p className="text-muted-foreground">{partnerData.technicalContact.email}</p>
-                    <p className="text-muted-foreground">{partnerData.technicalContact.phone}</p>
+                    <p>{partnerData.technicalContact?.name || '—'}</p>
+                    <p className="text-muted-foreground">{partnerData.technicalContact?.email || '—'}</p>
+                    <p className="text-muted-foreground">{partnerData.technicalContact?.phone || '—'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -374,9 +349,9 @@ export const PartnerDetail = () => {
                 <div>
                   <p className="text-sm font-medium mb-2">Partner Backend System</p>
                   <div className="space-y-1">
-                    <Badge variant="outline">{partnerData.erpContext.partnerERP.system}</Badge>
+                    <Badge variant="outline">{partnerData.erpContext?.partnerERP?.system || '—'}</Badge>
                     <p className="text-sm text-muted-foreground">
-                      {partnerData.erpContext.partnerERP.version}
+                      {partnerData.erpContext?.partnerERP?.version || '—'}
                     </p>
                     {partnerData.erpContext.partnerERP.hasCustomizations && (
                       <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-0 text-xs">Has Customizations</Badge>
@@ -389,13 +364,13 @@ export const PartnerDetail = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Database className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">{partnerData.erpContext.targetSystem.system}</span>
+                      <span className="font-medium">{partnerData.erpContext?.targetSystem?.system || '—'}</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Integration: {partnerData.erpContext.targetSystem.integrationMethod}
+                      Integration: {partnerData.erpContext?.targetSystem?.integrationMethod || '—'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Data Owner: {partnerData.erpContext.targetSystem.dataOwner}
+                      Data Owner: {partnerData.erpContext?.targetSystem?.dataOwner || '—'}
                     </p>
                   </div>
                 </div>
@@ -406,11 +381,13 @@ export const PartnerDetail = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Document Agreements</CardTitle>
-                <CardDescription>{partnerData.documents.length} document type(s) configured</CardDescription>
+                <CardDescription>
+                  {partnerData.documents?.length ? `${partnerData.documents.length} document type(s) configured` : 'No documents configured'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {partnerData.documents.map((doc) => (
+                  {(partnerData.documents || []).map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
                       <div className="flex items-center gap-3">
                         <Badge variant="outline" className="font-mono">{doc.transactionSet}</Badge>
@@ -552,7 +529,10 @@ export const PartnerDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {partnerData.documents.map((doc) => (
+                {(partnerData.documents || []).length === 0 ? (
+                  <p className="text-center py-8 text-muted-foreground">No document agreements configured</p>
+                ) : (
+                partnerData.documents.map((doc) => (
                   <Card key={doc.id} className="border-border">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between mb-4">
@@ -601,17 +581,18 @@ export const PartnerDetail = () => {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">SLA</p>
-                          <p className="text-sm font-medium">{doc.sla.deliveryTime}</p>
+                          <p className="text-sm font-medium">{doc.sla?.deliveryTime || '—'}</p>
                         </div>
                       </div>
-                      {doc.sla.retryRules && (
+                      {doc.sla?.retryRules && (
                         <div className="mt-3 pt-3 border-t border-border">
                           <p className="text-xs text-muted-foreground">Retry Rules: {doc.sla.retryRules}</p>
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                ))
+                )}
               </div>
             </CardContent>
           </Card>
