@@ -990,8 +990,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Uploaded Files Summary */}
-        {uploadedFiles.length > 0 && (
+        {/* Uploaded Files Summary - hidden in voice-only mode */}
+        {!voiceMode && uploadedFiles.length > 0 && (
           <motion.div 
             className="px-6 py-3 border-t border-cyan-500/30 bg-black/70 relative z-10"
             initial={{ opacity: 0, y: 10 }}
@@ -1014,7 +1014,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
 
         {/* Input Area */}
         <div 
-          className="px-6 py-4 border-t border-cyan-500/30 bg-black/70 relative z-10"
+          className="px-6 py-6 border-t border-cyan-500/30 bg-black/70 relative z-10"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
               e.preventDefault();
@@ -1022,92 +1022,119 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
             }
           }}
         >
-          <div className="flex items-center gap-2">
-            {/* File Upload */}
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.xlsx,.xls,.txt"
-                onChange={handleFileUpload}
-                className="hidden"
+          {voiceMode ? (
+            /* Voice-only layout: large centered mic button */
+            <div className="flex flex-col items-center justify-center gap-4">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex flex-col items-center gap-3"
+              >
+                <Button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={isProcessing}
+                  className={`h-24 w-24 rounded-full ${
+                    isListening 
+                      ? 'bg-red-600/40 border-4 border-red-500 text-red-400 animate-pulse shadow-lg shadow-red-500/50' 
+                      : 'bg-purple-600/30 border-4 border-purple-500/70 text-purple-300 hover:bg-purple-600/40 hover:border-purple-400 shadow-lg shadow-purple-500/30'
+                  }`}
+                  title={isListening ? 'Stop Recording' : 'Tap to speak'}
+                >
+                  {isListening ? (
+                    <MicOff className="w-12 h-12" />
+                  ) : (
+                    <Mic className="w-12 h-12" />
+                  )}
+                </Button>
+                <span className="text-sm font-medium text-cyan-300/90">
+                  {isListening ? 'Listening... Speak now' : 'Tap to speak your answer'}
+                </span>
+              </motion.div>
+              {selectedOptions.length > 0 && currentQuestion?.multiple && (
+                <motion.div 
+                  className="flex items-center gap-2 flex-wrap justify-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <span className="text-xs text-cyan-400 font-mono font-bold">SELECTED:</span>
+                  {selectedOptions.map((option, idx) => (
+                    <Badge key={idx} className="text-xs bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 font-mono">
+                      {option}
+                    </Badge>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={(e) => handleSendMessage(e)}
+                    className="text-xs h-8 bg-green-600/80 hover:bg-green-500/80 text-white border border-green-400 font-mono"
+                  >
+                    Confirm
+                  </Button>
+                </motion.div>
+              )}
+            </div>
+          ) : (
+            /* Input mode: upload, text input, send */
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xlsx,.xls,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="flex-shrink-0 bg-green-600/20 border-2 border-green-500/50 text-green-400 hover:bg-green-600/30 hover:border-green-400"
+                    title="Upload Document"
+                  >
+                    <Upload className="w-4 h-4" />
+                  </Button>
+                </motion.div>
+              </label>
+              <Input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation?.();
+                    handleSendMessage(e);
+                    return false;
+                  }
+                }}
+                placeholder={
+                  currentQuestion?.type === 'multi-select' && currentQuestion.multiple
+                    ? 'Select options above or type your answer...'
+                    : currentQuestion?.placeholder || 'Type your answer...'
+                }
+                disabled={isProcessing || (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple)}
+                className="flex-1 bg-black/60 border-2 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/50 font-mono"
               />
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                 <Button
                   type="button"
-                  size="icon"
-                  className="flex-shrink-0 bg-green-600/20 border-2 border-green-500/50 text-green-400 hover:bg-green-600/30 hover:border-green-400"
-                  title="Upload Document"
+                  onClick={(e) => handleSendMessage(e)}
+                  disabled={
+                    isProcessing ||
+                    (!inputValue.trim() && selectedOptions.length === 0) ||
+                    (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple && selectedOptions.length === 0)
+                  }
+                  className="flex-shrink-0 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400 shadow-lg shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Upload className="w-4 h-4" />
+                  <Send className="w-4 h-4" />
                 </Button>
               </motion.div>
-            </label>
+            </div>
+          )}
 
-            {/* Voice Input - only when voiceMode is enabled */}
-            {voiceMode && (
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <Button
-                  type="button"
-                  size="icon"
-                  onClick={isListening ? stopListening : startListening}
-                  className={`flex-shrink-0 ${
-                    isListening 
-                      ? 'bg-red-600/30 border-2 border-red-500 text-red-400 animate-pulse' 
-                      : 'bg-purple-600/20 border-2 border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:border-purple-400'
-                  }`}
-                  title={isListening ? 'Stop Recording' : 'Voice Input'}
-                >
-                  {isListening ? (
-                    <MicOff className="w-4 h-4" />
-                  ) : (
-                    <Mic className="w-4 h-4" />
-                  )}
-                </Button>
-              </motion.div>
-            )}
-
-            {/* Text Input */}
-            <Input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.stopImmediatePropagation?.();
-                  handleSendMessage(e);
-                  return false;
-                }
-              }}
-              placeholder={
-                currentQuestion?.type === 'multi-select' && currentQuestion.multiple
-                  ? 'Select options above or type your answer...'
-                  : currentQuestion?.placeholder || 'Type your answer...'
-              }
-              disabled={isProcessing || (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple)}
-              className="flex-1 bg-black/60 border-2 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/50 font-mono"
-            />
-
-            {/* Send Button */}
-            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-              <Button
-                type="button"
-                onClick={(e) => handleSendMessage(e)}
-                disabled={
-                  isProcessing ||
-                  (!inputValue.trim() && selectedOptions.length === 0) ||
-                  (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple && selectedOptions.length === 0)
-                }
-                className="flex-shrink-0 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400 shadow-lg shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </motion.div>
-          </div>
-
-          {/* Selected Options Display */}
-          {selectedOptions.length > 0 && currentQuestion?.multiple && (
+          {/* Selected Options Display - input mode only */}
+          {!voiceMode && selectedOptions.length > 0 && currentQuestion?.multiple && (
             <motion.div 
               className="mt-2 flex items-center gap-2 flex-wrap"
               initial={{ opacity: 0, y: -10 }}
