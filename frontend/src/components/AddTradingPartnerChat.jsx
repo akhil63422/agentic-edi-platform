@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Mic, MicOff, Upload, FileText, Bot, User, CheckCircle2, Loader2, Zap, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -255,8 +255,10 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
   const formDataRef = useRef(formData);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
   const speechUtteranceRef = useRef(null);
+  const isProcessingRef = useRef(false);
   formDataRef.current = formData;
   currentQuestionIndexRef.current = currentQuestionIndex;
+  isProcessingRef.current = isProcessing;
 
   // Check AI backend status on mount
   useEffect(() => {
@@ -294,12 +296,29 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Voice output (TTS): speak the question when in Voice Assistant mode
+  // Auto-start listening when TTS ends (voice mode only)
+  const startAutoListening = useCallback(() => {
+    if (!voiceMode || !recognitionRef.current) return;
+    if (isProcessingRef.current) return;
+    try {
+      window.speechSynthesis?.cancel();
+      setIsListening(true);
+      toast.info('Listening... Speak now.');
+      recognitionRef.current.start();
+    } catch (e) {
+      console.warn('Auto-start listen failed:', e);
+      setIsListening(false);
+    }
+  }, [voiceMode]);
+
+  const startAutoListeningRef = useRef(startAutoListening);
+  startAutoListeningRef.current = startAutoListening;
+
+  // Voice output (TTS): speak the question, then auto-start listening when done
   useEffect(() => {
     if (!voiceMode || !open || messages.length === 0) return;
     const last = messages[messages.length - 1];
     if (last?.type !== 'ai' || !last.questionId || !last.content) return;
-    // Skip summary/completion messages
     if (last.id?.startsWith('summary-') || last.id?.startsWith('complete-')) return;
     const speakable = last.speak ? last.speak : toSpeakableText(last.content);
     if (!speakable) return;
@@ -310,11 +329,13 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     u.pitch = 1;
     u.volume = 1;
     u.lang = 'en-US';
+    u.onend = () => {
+      // Auto-start listening after TTS ends (small delay for browser)
+      setTimeout(() => startAutoListeningRef.current?.(), 400);
+    };
     speechUtteranceRef.current = u;
     window.speechSynthesis.speak(u);
-    return () => {
-      window.speechSynthesis.cancel();
-    };
+    return () => window.speechSynthesis.cancel();
   }, [messages, voiceMode, open]);
 
   // Browser fallback: SpeechRecognition (Chrome)
@@ -1032,7 +1053,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
               >
                 <Button
                   type="button"
-                  onClick={isListening ? stopListening : startListening}
+                  onClick={isListening ? stopListening : (voiceMode ? startAutoListening : startListening)}
                   disabled={isProcessing}
                   className={`h-24 w-24 rounded-full ${
                     isListening 
