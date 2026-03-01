@@ -67,18 +67,34 @@ const getFemaleVoice = () => {
   return femaleLike || enVoices[0] || voices[0];
 };
 
+let currentTTSAudio = null;
+
+const stopAllVoice = () => {
+  window.speechSynthesis?.cancel();
+  if (currentTTSAudio) {
+    try {
+      currentTTSAudio.pause();
+      currentTTSAudio.currentTime = 0;
+    } catch (_) {}
+    currentTTSAudio = null;
+  }
+};
+
 const speakWithFemaleVoice = async (text, onEnd) => {
   if (!text?.trim()) return;
-  window.speechSynthesis?.cancel();
+  stopAllVoice();
   try {
     const blob = await partnerAIService.getTTSAudio(text);
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    currentTTSAudio = audio;
     audio.onended = () => {
+      currentTTSAudio = null;
       URL.revokeObjectURL(url);
       onEnd?.();
     };
     audio.onerror = () => {
+      currentTTSAudio = null;
       URL.revokeObjectURL(url);
       fallbackSpeak(text, onEnd);
     };
@@ -606,7 +622,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
 
   const handleAnswer = async (answer, overrideIndex = null) => {
     if (!answer || !answer.trim()) return;
-    if (isProcessing) return; // Prevent multiple simultaneous calls
+    if (isProcessing) return;
+    stopAllVoice();
     const idx = overrideIndex ?? currentQuestionIndex;
     const currentSection = CONVERSATION_FLOW[idx.section];
     const currentQuestion = currentSection?.questions[idx.question];
@@ -739,6 +756,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const moveToNextQuestion = (fromIndex = null) => {
     setIsProcessing(true);
     const idx = fromIndex ?? currentQuestionIndex;
+    const delayMs = 2000;
     setTimeout(() => {
       let nextSection = idx.section;
       let nextQuestion = idx.question + 1;
@@ -781,7 +799,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       setInputValue('');
       setSelectedOptions([]);
       setIsProcessing(false);
-    }, 500);
+    }, delayMs);
   };
 
   const generateSummary = () => {
