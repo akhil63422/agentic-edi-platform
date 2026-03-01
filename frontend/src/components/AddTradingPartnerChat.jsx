@@ -219,10 +219,15 @@ const validateField = (questionId, answer, formData, question) => {
     }
 
     case 'isaSenderId':
-    case 'isaReceiverId':
+    case 'isaReceiverId': {
+      const words = String(val).trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const hasInvalidWord = words.some((w) => !DIGIT_WORDS[w] && !/^\d+$/.test(w));
+      const digitsOnly = words.map((w) => DIGIT_WORDS[w] ?? w.replace(/\D/g, '')).join('');
       if (val.length < 1) return { valid: false, error: 'Required.', speak: "That's required. Please provide the ISA ID." };
-      if (val.length > 15) return { valid: false, error: 'ISA ID max 15 characters.', speak: "That's too long. ISA IDs are usually 15 characters or less." };
+      if (hasInvalidWord || digitsOnly.length === 0) return { valid: false, error: 'ISA ID must be numbers only. No letters or text allowed.', speak: "That's invalid. ISA ID must contain only numbers. No letters or text. Please provide a numeric ID." };
+      if (digitsOnly.length > 15) return { valid: false, error: 'ISA ID max 15 digits.', speak: "That's too long. ISA ID must be 15 digits or less." };
       return { valid: true };
+    }
 
     case 'documents': {
       const parts = val.split(/,\s*/).map((s) => s.trim()).filter(Boolean);
@@ -368,17 +373,19 @@ const CONVERSATION_FLOW = [
       },
       {
         id: 'isaSenderId',
-        question: 'What is the ISA Sender ID?',
+        question: 'What is the ISA Sender ID? (Numbers only)',
+        speak: "What is the ISA Sender ID? Numbers only, no letters.",
         type: 'text',
         required: true,
-        placeholder: 'e.g., SENDER',
+        placeholder: 'e.g., 1234567890',
       },
       {
         id: 'isaReceiverId',
-        question: 'What is the ISA Receiver ID?',
+        question: 'What is the ISA Receiver ID? (Numbers only)',
+        speak: "What is the ISA Receiver ID? Numbers only, no letters.",
         type: 'text',
         required: true,
-        placeholder: 'e.g., WALMART',
+        placeholder: 'e.g., 0090123456',
       },
     ],
   },
@@ -817,6 +824,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       updates.documents = answer.split(', ').map(doc => doc.split(' ')[0]);
     } else if (currentQuestion.id === 'partnerCode') {
       updates.partnerCode = normalizePartnerCode(answer);
+    } else if (currentQuestion.id === 'isaSenderId' || currentQuestion.id === 'isaReceiverId') {
+      const words = String(answer).trim().toLowerCase().split(/\s+/).filter(Boolean);
+      updates[currentQuestion.id] = words.map((w) => DIGIT_WORDS[w] ?? w.replace(/\D/g, '')).join('');
     } else {
       updates[currentQuestion.id] = answer;
     }
