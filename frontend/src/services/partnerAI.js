@@ -46,4 +46,14 @@ export const partnerAIService = {
     const response = await api.post('/partners/ai/save-partner', partnerData);
     return response.data;
   },
+
+  // Text-to-speech (neural female voice via edge-tts)
+  getTTSAudio: async (text, voice = 'en-US-JennyNeural') => {
+    const params = new URLSearchParams({ text: text.substring(0, 1000), voice });
+    const base = api.defaults.baseURL || '/api/v1';
+    const fullBase = base.startsWith('http') ? base : (typeof window !== 'undefined' ? window.location.origin : '') + base;
+    const res = await fetch(`${fullBase}/partners/ai/tts?${params}`);
+    if (!res.ok) throw new Error('TTS failed');
+    return res.blob();
+  },
 };

@@ -67,15 +67,34 @@ const getFemaleVoice = () => {
   return femaleLike || enVoices[0] || voices[0];
 };
 
-const speakWithFemaleVoice = (text, onEnd) => {
-  if (!text?.trim() || !('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
+const speakWithFemaleVoice = async (text, onEnd) => {
+  if (!text?.trim()) return;
+  window.speechSynthesis?.cancel();
+  try {
+    const blob = await partnerAIService.getTTSAudio(text);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      onEnd?.();
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      fallbackSpeak(text, onEnd);
+    };
+    await audio.play();
+  } catch {
+    fallbackSpeak(text, onEnd);
+  }
+};
+
+const fallbackSpeak = (text, onEnd) => {
+  if (!('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   const voice = getFemaleVoice();
   if (voice) u.voice = voice;
   u.rate = 0.92;
   u.pitch = 1.1;
-  u.volume = 1;
   u.lang = 'en-US';
   if (onEnd) u.onend = onEnd;
   window.speechSynthesis.speak(u);
@@ -126,6 +145,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'partnerCode',
         question: '✨ Great! Now, what trading partner code would you like to use? This is an internal identifier (max 10 characters).',
+        speak: "Great! What trading partner code would you like to use? You can type it or say it.",
         type: 'text',
         required: true,
         placeholder: 'e.g., WMT',
@@ -134,6 +154,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'role',
         question: 'What role does this partner play? Are they a Customer, Supplier, or Both?',
+        speak: "What role does this partner play? Are they a Customer, Supplier, or Both? You can select one of the options below, or say your answer.",
         type: 'multi-select',
         options: ['Customer', 'Supplier', 'Both'],
         required: true,
@@ -141,6 +162,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'industry',
         question: 'What industry are they in?',
+        speak: "What industry are they in? You can select an option or tell me.",
         type: 'multi-select',
         options: ['Retail', 'Manufacturing', 'Logistics', 'Healthcare', 'Automotive', 'Other'],
         required: false,
@@ -155,6 +177,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'timezone',
         question: 'What timezone are they in?',
+        speak: "What timezone are they in? Select one below or say it.",
         type: 'multi-select',
         options: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Other'],
         required: false,
@@ -219,6 +242,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'ediStandard',
         question: 'Moving on to EDI configuration. What EDI standard do they use?',
+        speak: "Moving on to EDI configuration. What EDI standard do they use? You can select X12, EDIFACT, or TRADACOMS.",
         type: 'multi-select',
         options: ['X12', 'EDIFACT', 'TRADACOMS'],
         required: true,
@@ -226,6 +250,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'version',
         question: 'What version?',
+        speak: "What version? Select 5010, 4010, or 3060.",
         type: 'multi-select',
         options: ['5010', '4010', '3060'],
         required: true,
@@ -252,6 +277,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'documents',
         question: 'What document types will you exchange? You can select multiple.',
+        speak: "What document types will you exchange? You can select multiple options below, or say them. For example, 850 and 810.",
         type: 'multi-select',
         options: ['850 (Purchase Order)', '810 (Invoice)', '856 (Advance Ship Notice)', '997 (Functional Acknowledgment)'],
         required: true,
@@ -265,6 +291,7 @@ const CONVERSATION_FLOW = [
       {
         id: 'transportType',
         question: 'How will files be transferred?',
+        speak: "How will files be transferred? Select SFTP, S3, FTP, or AS2.",
         type: 'multi-select',
         options: ['SFTP', 'S3', 'FTP', 'AS2'],
         required: true,
@@ -273,7 +300,7 @@ const CONVERSATION_FLOW = [
   },
 ];
 
-export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = true }) => {
+export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const [messages, setMessages] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState({ section: 0, question: 0 });
   const [inputValue, setInputValue] = useState('');
@@ -340,9 +367,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Auto-start listening when TTS ends (voice mode only)
+  // Auto-start listening when TTS ends
   const startAutoListening = useCallback(() => {
-    if (!voiceMode || !recognitionRef.current) return;
+    if (!recognitionRef.current) return;
     if (isProcessingRef.current) return;
     try {
       window.speechSynthesis?.cancel();
@@ -353,14 +380,14 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
       console.warn('Auto-start listen failed:', e);
       setIsListening(false);
     }
-  }, [voiceMode]);
+  }, []);
 
   const startAutoListeningRef = useRef(startAutoListening);
   startAutoListeningRef.current = startAutoListening;
 
   // Voice output (TTS): speak the question, then auto-start listening when done
   useEffect(() => {
-    if (!voiceMode || !open || messages.length === 0) return;
+    if (!open || messages.length === 0) return;
     const last = messages[messages.length - 1];
     if (last?.type !== 'ai' || !last.questionId || !last.content) return;
     if (last.id?.startsWith('summary-') || last.id?.startsWith('complete-')) return;
@@ -370,7 +397,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
       setTimeout(() => startAutoListeningRef.current?.(), 400);
     });
     return () => window.speechSynthesis?.cancel();
-  }, [messages, voiceMode, open]);
+  }, [messages, open]);
 
   // Browser fallback: SpeechRecognition (Chrome)
   useEffect(() => {
@@ -405,7 +432,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
 
   const startListening = async () => {
     if (isListening) return;
-    if (voiceMode && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setIsListening(true);
     toast.info('Listening... Speak now.');
 
@@ -807,7 +834,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
     setMessages(prev => [...prev, {
       id: `complete-${Date.now()}`,
       type: 'ai',
-      content: "⚡ Perfect! I've gathered all the information. Let me finalize the setup...\n\n🎮 Processing configuration...",
+      content: "Perfect! I've got everything I need. Let me save your partner to the database...",
     }]);
 
     try {
@@ -830,13 +857,13 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
       const result = await onComplete(finalData);
       
       if (result?.success) {
-        const successMsg = "Trading partner added successfully! Your partner has been saved to the database.";
+        const successMsg = "Your partner has been added successfully! Is there anything else you'd like me to help you with?";
         setMessages(prev => [...prev, {
           id: `success-${Date.now()}`,
           type: 'ai',
           content: `✅ ${successMsg}`,
         }]);
-        if (voiceMode) speakWithFemaleVoice(successMsg);
+        speakWithFemaleVoice(successMsg);
         setTimeout(() => onClose?.(), 2500);
       }
     } catch (error) {
@@ -1069,8 +1096,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Uploaded Files Summary - hidden in voice-only mode */}
-        {!voiceMode && uploadedFiles.length > 0 && (
+        {/* Uploaded Files Summary */}
+        {uploadedFiles.length > 0 && (
           <motion.div 
             className="px-6 py-3 border-t border-cyan-500/30 bg-black/70 relative z-10"
             initial={{ opacity: 0, y: 10 }}
@@ -1091,9 +1118,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
           </motion.div>
         )}
 
-        {/* Input Area */}
+        {/* Input Area - voice + keyboard combined */}
         <div 
-          className="px-6 py-6 border-t border-cyan-500/30 bg-black/70 relative z-10"
+          className="px-6 py-4 border-t border-cyan-500/30 bg-black/70 relative z-10"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
               e.preventDefault();
@@ -1101,119 +1128,80 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete, voiceMode = t
             }
           }}
         >
-          {voiceMode ? (
-            /* Voice-only layout: large centered mic button */
-            <div className="flex flex-col items-center justify-center gap-4">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex flex-col items-center gap-3"
-              >
-                <Button
-                  type="button"
-                  onClick={isListening ? stopListening : (voiceMode ? startAutoListening : startListening)}
-                  disabled={isProcessing}
-                  className={`h-24 w-24 rounded-full ${
-                    isListening 
-                      ? 'bg-red-600/40 border-4 border-red-500 text-red-400 animate-pulse shadow-lg shadow-red-500/50' 
-                      : 'bg-purple-600/30 border-4 border-purple-500/70 text-purple-300 hover:bg-purple-600/40 hover:border-purple-400 shadow-lg shadow-purple-500/30'
-                  }`}
-                  title={isListening ? 'Stop Recording' : 'Tap to speak'}
-                >
-                  {isListening ? (
-                    <MicOff className="w-12 h-12" />
-                  ) : (
-                    <Mic className="w-12 h-12" />
-                  )}
-                </Button>
-                <span className="text-sm font-medium text-cyan-300/90">
-                  {isListening ? 'Listening... Speak now' : 'Tap to speak your answer'}
-                </span>
-              </motion.div>
-              {selectedOptions.length > 0 && currentQuestion?.multiple && (
-                <motion.div 
-                  className="flex items-center gap-2 flex-wrap justify-center"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <span className="text-xs text-cyan-400 font-mono font-bold">SELECTED:</span>
-                  {selectedOptions.map((option, idx) => (
-                    <Badge key={idx} className="text-xs bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 font-mono">
-                      {option}
-                    </Badge>
-                  ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={(e) => handleSendMessage(e)}
-                    className="text-xs h-8 bg-green-600/80 hover:bg-green-500/80 text-white border border-green-400 font-mono"
-                  >
-                    Confirm
-                  </Button>
-                </motion.div>
-              )}
-            </div>
-          ) : (
-            /* Input mode: upload, text input, send */
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xlsx,.xls,.txt"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                  <Button
-                    type="button"
-                    size="icon"
-                    className="flex-shrink-0 bg-green-600/20 border-2 border-green-500/50 text-green-400 hover:bg-green-600/30 hover:border-green-400"
-                    title="Upload Document"
-                  >
-                    <Upload className="w-4 h-4" />
-                  </Button>
-                </motion.div>
-              </label>
-              <Input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation?.();
-                    handleSendMessage(e);
-                    return false;
-                  }
-                }}
-                placeholder={
-                  currentQuestion?.type === 'multi-select' && currentQuestion.multiple
-                    ? 'Select options above or type your answer...'
-                    : currentQuestion?.placeholder || 'Type your answer...'
-                }
-                disabled={isProcessing || (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple)}
-                className="flex-1 bg-black/60 border-2 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/50 font-mono"
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
               />
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                 <Button
                   type="button"
-                  onClick={(e) => handleSendMessage(e)}
-                  disabled={
-                    isProcessing ||
-                    (!inputValue.trim() && selectedOptions.length === 0) ||
-                    (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple && selectedOptions.length === 0)
-                  }
-                  className="flex-shrink-0 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400 shadow-lg shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="icon"
+                  className="flex-shrink-0 bg-green-600/20 border-2 border-green-500/50 text-green-400 hover:bg-green-600/30 hover:border-green-400"
+                  title="Upload Document"
                 >
-                  <Send className="w-4 h-4" />
+                  <Upload className="w-4 h-4" />
                 </Button>
               </motion.div>
-            </div>
-          )}
+            </label>
+            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+              <Button
+                type="button"
+                size="icon"
+                onClick={isListening ? stopListening : startAutoListening}
+                disabled={isProcessing}
+                className={`flex-shrink-0 ${
+                  isListening 
+                    ? 'bg-red-600/30 border-2 border-red-500 text-red-400 animate-pulse' 
+                    : 'bg-purple-600/20 border-2 border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:border-purple-400'
+                }`}
+                title={isListening ? 'Stop' : 'Voice input'}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </Button>
+            </motion.div>
+            <Input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation?.();
+                  handleSendMessage(e);
+                  return false;
+                }
+              }}
+              placeholder={
+                currentQuestion?.type === 'multi-select' && currentQuestion.multiple
+                  ? 'Select options above or type/say your answer...'
+                  : currentQuestion?.placeholder || 'Type or speak your answer...'
+              }
+              disabled={isProcessing || (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple)}
+              className="flex-1 bg-black/60 border-2 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/50 font-mono"
+            />
+            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+              <Button
+                type="button"
+                onClick={(e) => handleSendMessage(e)}
+                disabled={
+                  isProcessing ||
+                  (!inputValue.trim() && selectedOptions.length === 0) ||
+                  (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple && selectedOptions.length === 0)
+                }
+                className="flex-shrink-0 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400 shadow-lg shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </motion.div>
+          </div>
 
-          {/* Selected Options Display - input mode only */}
-          {!voiceMode && selectedOptions.length > 0 && currentQuestion?.multiple && (
+          {/* Selected Options Display */}
+          {selectedOptions.length > 0 && currentQuestion?.multiple && (
             <motion.div 
               className="mt-2 flex items-center gap-2 flex-wrap"
               initial={{ opacity: 0, y: -10 }}

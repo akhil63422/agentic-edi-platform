@@ -2,6 +2,7 @@
 Partner AI API endpoints for chat, voice, and document processing
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi.responses import Response
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 import logging
@@ -47,6 +48,32 @@ async def update_partner_ai_config(update: PartnerAIConfigUpdate, db=Depends(get
     doc["_id"] = "platform"
     await db.platform_settings.update_one({"_id": "platform"}, {"$set": doc}, upsert=True)
     return {"system_prompt": config.get("system_prompt"), "name_synonyms": config.get("name_synonyms")}
+
+
+@router.get("/tts")
+async def text_to_speech(text: str = "", voice: str = "en-US-JennyNeural"):
+    """
+    Convert text to speech using edge-tts (neural female voice).
+    Returns audio/mpeg. Use ?text=... for the text to speak.
+    """
+    try:
+        import edge_tts
+        import io
+        text = (text or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        communicate = edge_tts.Communicate(text, voice)
+        chunks = []
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                chunks.append(chunk["data"])
+        audio_bytes = b"".join(chunks)
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    except ImportError:
+        raise HTTPException(status_code=503, detail="edge-tts not installed. Run: pip install edge-tts")
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/status")
