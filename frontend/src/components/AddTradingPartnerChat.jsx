@@ -875,14 +875,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       const result = await onComplete(finalData);
       
       if (result?.success) {
-        const successMsg = "Your partner has been added successfully! Is there anything else you'd like me to help you with?";
-        setMessages(prev => [...prev, {
-          id: `success-${Date.now()}`,
-          type: 'ai',
-          content: `✅ ${successMsg}`,
-        }]);
-        speakWithFemaleVoice(successMsg);
-        setTimeout(() => onClose?.(), 2500);
+        stopAllVoice();
+        onClose?.();
       }
     } catch (error) {
       console.error('Error completing partner setup:', error);
@@ -896,7 +890,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const progress = ((currentQuestionIndex.section * 100 + (currentQuestionIndex.question + 1) * (100 / CONVERSATION_FLOW[currentQuestionIndex.section]?.questions.length)) / CONVERSATION_FLOW.length);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(openState) => { if (!openState) stopAllVoice(); onClose?.(); }}>
       <style>{`
         [data-radix-dialog-overlay] {
           background: rgba(0, 0, 0, 0.9) !important;
