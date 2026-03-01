@@ -148,6 +148,7 @@ const matchVoiceToOptions = (text, options = []) => {
 // --- Field validation (blocks workflow until valid) ---
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const PHONE_MIN_DIGITS = 10;
+const PHONE_MAX_DIGITS = 15;
 
 const validateField = (questionId, answer, formData, question) => {
   const val = String(answer || '').trim();
@@ -167,7 +168,7 @@ const validateField = (questionId, answer, formData, question) => {
     case 'partnerCode': {
       const code = normalizePartnerCode(val) || val.replace(/\s/g, '').slice(0, 10).toUpperCase();
       if (!code || code.length < 1) return { valid: false, error: 'Partner code required.', speak: "I couldn't understand the partner code. Please say or type it again." };
-      if (code.length > 10) return { valid: false, error: 'Partner code max 10 characters.', speak: "Partner code must be 10 characters or less. Please try again." };
+      if (code.length !== 10) return { valid: false, error: 'Partner code must be exactly 10 characters.', speak: "Partner code must be exactly 10 characters. Please provide a 10-character code." };
       if (!/^[A-Za-z0-9]+$/.test(code)) return { valid: false, error: 'Partner code must be alphanumeric.', speak: "Partner code should only contain letters and numbers. Please try again." };
       return { valid: true };
     }
@@ -204,14 +205,18 @@ const validateField = (questionId, answer, formData, question) => {
       const digits = (normalizePhoneForVoice(val) || val).replace(/\D/g, '');
       if (!digits) return { valid: true };
       if (digits.length < PHONE_MIN_DIGITS) return { valid: false, error: 'Phone needs at least 10 digits.', speak: "That phone number seems too short. Please say or type it again with at least 10 digits." };
-      if (digits.length > 20) return { valid: false, error: 'Phone too long.', speak: "That phone number is too long. Please try again." };
+      if (digits.length > PHONE_MAX_DIGITS) return { valid: false, error: 'Phone must be 10–15 digits.', speak: "That phone number is too long. Please provide 10 to 15 digits." };
       return { valid: true };
     }
 
     case 'businessContactName':
-    case 'technicalContactName':
+    case 'technicalContactName': {
+      const invalidNamePhrases = ['now for the', 'what is', "what's", 'and their', 'their name', 'their email', 'their phone', 'the technical', 'the business', 'contact name', 'contact email', 'contact phone'];
+      const valLower = val.toLowerCase();
       if (val.length > 100) return { valid: false, error: 'Name too long.', speak: "That name is too long. Please try again." };
+      if (invalidNamePhrases.some((p) => valLower.includes(p) || valLower === p)) return { valid: false, error: "That doesn't look like a name.", speak: "That doesn't sound like a name. Please say or type the contact's name." };
       return { valid: true };
+    }
 
     case 'isaSenderId':
     case 'isaReceiverId':
@@ -250,11 +255,11 @@ const CONVERSATION_FLOW = [
       },
       {
         id: 'partnerCode',
-        question: '✨ Great! Now, what trading partner code would you like to use? This is an internal identifier (max 10 characters).',
-        speak: "Great! What trading partner code would you like to use? You can type it or say it.",
+        question: '✨ Great! Now, what trading partner code would you like to use? This must be exactly 10 characters (letters and numbers).',
+        speak: "Great! What trading partner code would you like to use? It must be exactly 10 characters. You can type it or say it.",
         type: 'text',
         required: true,
-        placeholder: 'e.g., WMT',
+        placeholder: 'e.g., WMT1234567 (10 chars)',
         maxLength: 10,
       },
       {
@@ -529,7 +534,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const startAutoListeningRef = useRef(startAutoListening);
   startAutoListeningRef.current = startAutoListening;
 
-  // Voice output (TTS): speak the question, then auto-start listening when done
+  // Voice output (TTS): speak the question, then auto-start listening when done (skip auto-listen for select-only questions)
   useEffect(() => {
     if (!open || messages.length === 0) return;
     const last = messages[messages.length - 1];
@@ -537,8 +542,9 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     if (last.id?.startsWith('summary-') || last.id?.startsWith('complete-')) return;
     const speakable = last.speak ? last.speak : toSpeakableText(last.content);
     if (!speakable) return;
+    const isSelectOnly = last.options && last.options.length > 0;
     speakWithFemaleVoice(speakable, () => {
-      setTimeout(() => startAutoListeningRef.current?.(), 400);
+      if (!isSelectOnly) setTimeout(() => startAutoListeningRef.current?.(), 400);
     });
     return () => window.speechSynthesis?.cancel();
   }, [messages, open]);
@@ -1396,13 +1402,13 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
                 type="button"
                 size="icon"
                 onClick={isListening ? stopListening : startAutoListening}
-                disabled={isProcessing}
+                disabled={isProcessing || (currentQuestion?.options?.length > 0)}
                 className={`flex-shrink-0 ${
                   isListening 
                     ? 'bg-red-600/30 border-2 border-red-500 text-red-400 animate-pulse' 
                     : 'bg-purple-600/20 border-2 border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:border-purple-400'
                 }`}
-                title={isListening ? 'Stop' : 'Voice input'}
+                title={currentQuestion?.options?.length > 0 ? 'Select an option above' : (isListening ? 'Stop' : 'Voice input')}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </Button>
@@ -1421,11 +1427,11 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
                 }
               }}
               placeholder={
-                currentQuestion?.type === 'multi-select' && currentQuestion.multiple
-                  ? 'Select options above or type/say your answer...'
+                currentQuestion?.options?.length > 0
+                  ? 'Select an option above (voice disabled for this question)'
                   : currentQuestion?.placeholder || 'Type or speak your answer...'
               }
-              disabled={isProcessing || (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple)}
+              disabled={isProcessing || (currentQuestion?.options?.length > 0)}
               className="flex-1 bg-black/60 border-2 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/50 font-mono"
             />
             <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
@@ -1434,8 +1440,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
                 onClick={(e) => handleSendMessage(e)}
                 disabled={
                   isProcessing ||
-                  (!inputValue.trim() && selectedOptions.length === 0) ||
-                  (currentQuestion?.type === 'multi-select' && !currentQuestion.multiple && selectedOptions.length === 0)
+                  (currentQuestion?.options?.length > 0 ? selectedOptions.length === 0 : !inputValue.trim() && selectedOptions.length === 0)
                 }
                 className="flex-shrink-0 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400 shadow-lg shadow-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
