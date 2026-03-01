@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Mic, MicOff, Upload, FileText, Bot, User, CheckCircle2, Loader2, Zap, Sparkles } from 'lucide-react';
+import { X, Send, Mic, MicOff, Upload, FileText, Bot, User, CheckCircle2, Loader2, Zap, Sparkles, Pencil, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogOverlay } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -143,6 +143,96 @@ const matchVoiceToOptions = (text, options = []) => {
   const parts = q.split(/\s+and\s+|\s*,\s*|\s+/).filter((p) => p.length >= 2);
   const matched = [...new Set(parts.map((p) => lowerOptions.find(({ lower, key }) => lower.includes(p) || key?.includes(p) || p.includes(key))).filter(Boolean).map(({ original }) => original))];
   return matched.length > 0 ? (matched.length === 1 ? matched[0] : matched) : null;
+};
+
+// --- Field validation (blocks workflow until valid) ---
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const PHONE_MIN_DIGITS = 10;
+
+const validateField = (questionId, answer, formData, question) => {
+  const val = String(answer || '').trim();
+  const opts = question?.options || [];
+
+  if (question?.required && !val) {
+    return { valid: false, error: 'This field is required.', speak: "Sorry, this field is required. Please give me a valid answer." };
+  }
+  if (!question?.required && !val) return { valid: true };
+
+  switch (questionId) {
+    case 'businessName':
+      if (val.length < 2) return { valid: false, error: 'Business name must be at least 2 characters.', speak: "That's too short. Please give me the full business name." };
+      if (val.length > 200) return { valid: false, error: 'Business name is too long.', speak: "That's too long. Please give me a shorter business name." };
+      return { valid: true };
+
+    case 'partnerCode': {
+      const code = normalizePartnerCode(val) || val.replace(/\s/g, '').slice(0, 10).toUpperCase();
+      if (!code || code.length < 1) return { valid: false, error: 'Partner code required.', speak: "I couldn't understand the partner code. Please say or type it again." };
+      if (code.length > 10) return { valid: false, error: 'Partner code max 10 characters.', speak: "Partner code must be 10 characters or less. Please try again." };
+      if (!/^[A-Za-z0-9]+$/.test(code)) return { valid: false, error: 'Partner code must be alphanumeric.', speak: "Partner code should only contain letters and numbers. Please try again." };
+      return { valid: true };
+    }
+
+    case 'role':
+    case 'ediStandard':
+    case 'version':
+    case 'transportType':
+    case 'timezone': {
+      const matched = matchVoiceToOptions(val, opts);
+      if (!matched) return { valid: false, error: `Choose one of: ${opts.join(', ')}`, speak: `Sorry, I didn't recognize that. Please select one of the options: ${opts.slice(0, 3).join(', ')}.` };
+      return { valid: true };
+    }
+
+    case 'industry':
+      if (!val) return { valid: true };
+      if (!matchVoiceToOptions(val, opts)) return { valid: false, error: `Choose one of: ${opts.join(', ')}`, speak: `Please select one of the options: ${opts.slice(0, 3).join(', ')}.` };
+      return { valid: true };
+
+    case 'country':
+      if (val.length > 100) return { valid: false, error: 'Country name too long.', speak: "That's too long. Please give me a shorter country name." };
+      return { valid: true };
+
+    case 'businessContactEmail':
+    case 'technicalContactEmail': {
+      const email = normalizeEmailForVoice(val) || val;
+      if (!email) return { valid: true };
+      if (!EMAIL_REGEX.test(email)) return { valid: false, error: 'Invalid email.', speak: "That doesn't look like a valid email. Please say or type it again, like: example at company dot com." };
+      return { valid: true };
+    }
+
+    case 'businessContactPhone':
+    case 'technicalContactPhone': {
+      const digits = (normalizePhoneForVoice(val) || val).replace(/\D/g, '');
+      if (!digits) return { valid: true };
+      if (digits.length < PHONE_MIN_DIGITS) return { valid: false, error: 'Phone needs at least 10 digits.', speak: "That phone number seems too short. Please say or type it again with at least 10 digits." };
+      if (digits.length > 20) return { valid: false, error: 'Phone too long.', speak: "That phone number is too long. Please try again." };
+      return { valid: true };
+    }
+
+    case 'businessContactName':
+    case 'technicalContactName':
+      if (val.length > 100) return { valid: false, error: 'Name too long.', speak: "That name is too long. Please try again." };
+      return { valid: true };
+
+    case 'isaSenderId':
+    case 'isaReceiverId':
+      if (val.length < 1) return { valid: false, error: 'Required.', speak: "That's required. Please provide the ISA ID." };
+      if (val.length > 15) return { valid: false, error: 'ISA ID max 15 characters.', speak: "That's too long. ISA IDs are usually 15 characters or less." };
+      return { valid: true };
+
+    case 'documents': {
+      const parts = val.split(/,\s*/).map((s) => s.trim()).filter(Boolean);
+      const matched = parts.flatMap((p) => {
+        const m = matchVoiceToOptions(p, opts);
+        return m ? (Array.isArray(m) ? m : [m]) : [];
+      });
+      const unique = [...new Set(matched)];
+      if (unique.length === 0) return { valid: false, error: 'Select at least one document type.', speak: "Please select at least one document type from the options below." };
+      return { valid: true };
+    }
+
+    default:
+      return { valid: true };
+  }
 };
 
 // Conversation flow configuration
@@ -316,6 +406,39 @@ const CONVERSATION_FLOW = [
   },
 ];
 
+// Map question ID -> { section, question } for edit navigation
+const getQuestionIndexById = (id) => {
+  for (let s = 0; s < CONVERSATION_FLOW.length; s++) {
+    const qs = CONVERSATION_FLOW[s].questions;
+    for (let q = 0; q < qs.length; q++) {
+      if (qs[q].id === id) return { section: s, question: q };
+    }
+  }
+  return null;
+};
+
+// Review fields config: id, label, getValue from formData
+const REVIEW_FIELDS = [
+  { id: 'businessName', label: 'Business Name', getValue: (fd) => fd.businessName },
+  { id: 'partnerCode', label: 'Partner Code', getValue: (fd) => fd.partnerCode },
+  { id: 'role', label: 'Role', getValue: (fd) => fd.role },
+  { id: 'industry', label: 'Industry', getValue: (fd) => fd.industry },
+  { id: 'country', label: 'Country', getValue: (fd) => fd.country },
+  { id: 'timezone', label: 'Timezone', getValue: (fd) => fd.timezone },
+  { id: 'businessContactName', label: 'Business Contact Name', getValue: (fd) => fd.businessContact?.name },
+  { id: 'businessContactEmail', label: 'Business Contact Email', getValue: (fd) => fd.businessContact?.email },
+  { id: 'businessContactPhone', label: 'Business Contact Phone', getValue: (fd) => fd.businessContact?.phone },
+  { id: 'technicalContactName', label: 'Technical Contact Name', getValue: (fd) => fd.technicalContact?.name },
+  { id: 'technicalContactEmail', label: 'Technical Contact Email', getValue: (fd) => fd.technicalContact?.email },
+  { id: 'technicalContactPhone', label: 'Technical Contact Phone', getValue: (fd) => fd.technicalContact?.phone },
+  { id: 'ediStandard', label: 'EDI Standard', getValue: (fd) => fd.ediStandard },
+  { id: 'version', label: 'Version', getValue: (fd) => fd.version },
+  { id: 'isaSenderId', label: 'ISA Sender ID', getValue: (fd) => fd.isaSenderId },
+  { id: 'isaReceiverId', label: 'ISA Receiver ID', getValue: (fd) => fd.isaReceiverId },
+  { id: 'documents', label: 'Documents', getValue: (fd) => Array.isArray(fd.documents) ? fd.documents.join(', ') : fd.documents },
+  { id: 'transportType', label: 'Transport', getValue: (fd) => fd.transportType },
+];
+
 export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const [messages, setMessages] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState({ section: 0, question: 0 });
@@ -326,6 +449,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   const [formData, setFormData] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [aiStatus, setAiStatus] = useState('checking'); // 'active' | 'fallback' | 'checking'
+  const [reviewMode, setReviewMode] = useState(false);
+  const [editingFromReview, setEditingFromReview] = useState(false);
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -360,21 +485,24 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     }
   }, [open]);
 
-  // Initialize conversation
+  // Initialize conversation when dialog opens
   useEffect(() => {
-    if (open && messages.length === 0) {
-      const firstQuestion = CONVERSATION_FLOW[0].questions[0];
-      setMessages([
-        {
-          id: '1',
-          type: 'ai',
-          content: firstQuestion.question,
-          speak: firstQuestion.speak,
-          questionId: firstQuestion.id,
-          questionType: firstQuestion.type,
-          options: firstQuestion.options,
-        },
-      ]);
+    if (open) {
+      setReviewMode(false);
+      if (messages.length === 0) {
+        const firstQuestion = CONVERSATION_FLOW[0].questions[0];
+        setMessages([
+          {
+            id: '1',
+            type: 'ai',
+            content: firstQuestion.question,
+            speak: firstQuestion.speak,
+            questionId: firstQuestion.id,
+            questionType: firstQuestion.type,
+            options: firstQuestion.options,
+          },
+        ]);
+      }
     }
   }, [open]);
 
@@ -630,7 +758,23 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     
     if (!currentQuestion) return;
     
-    // Add user message immediately
+    // Validate before accepting - block workflow on failure
+    const validation = validateField(currentQuestion.id, answer, formDataRef.current, currentQuestion);
+    if (!validation.valid) {
+      const errorContent = `❌ ${validation.error}\n\nPlease try again.`;
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        type: 'ai',
+        content: errorContent,
+        speak: validation.speak,
+        questionId: currentQuestion.id,
+        questionType: currentQuestion.type,
+        options: currentQuestion.options,
+      }]);
+      return;
+    }
+    
+    // Add user message
     const userMessageId = `user-${Date.now()}`;
     setMessages(prev => [...prev, {
       id: userMessageId,
@@ -749,7 +893,13 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       }
     })();
 
-    // Move to next question immediately (don't wait for AI)
+    // If editing from review, return to review step instead of continuing
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setReviewMode(true);
+      setIsProcessing(false);
+      return;
+    }
     moveToNextQuestion(idx);
   };
 
@@ -767,18 +917,17 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
         nextQuestion = 0;
       }
 
-      // Check if we've completed all sections
+      // Check if we've completed all sections -> go to Review & Edit step
       if (nextSection >= CONVERSATION_FLOW.length) {
-        // Show summary before completing
         const summary = generateSummary();
         setMessages(prev => [...prev, {
           id: `summary-${Date.now()}`,
           type: 'ai',
-          content: summary,
+          content: summary.replace('Finalizing your trading partner setup...', 'Please review your answers below. You can edit any field before submitting.'),
         }]);
-        
         setTimeout(() => {
-          handleComplete();
+          setReviewMode(true);
+          setIsProcessing(false);
         }, 2000);
         return;
       }
@@ -846,8 +995,30 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
     });
   };
 
+  const handleEditField = (fieldId) => {
+    const idx = getQuestionIndexById(fieldId);
+    if (!idx) return;
+    stopAllVoice();
+    setReviewMode(false);
+    setEditingFromReview(true);
+    setCurrentQuestionIndex(idx);
+    const q = CONVERSATION_FLOW[idx.section].questions[idx.question];
+    setMessages(prev => [...prev, {
+      id: `edit-${Date.now()}`,
+      type: 'ai',
+      content: `Let's update ${REVIEW_FIELDS.find((f) => f.id === fieldId)?.label || fieldId}.\n\n${q.question}`,
+      speak: `Let's update ${REVIEW_FIELDS.find((f) => f.id === fieldId)?.label || fieldId}. ${q.speak || q.question}`,
+      questionId: q.id,
+      questionType: q.type,
+      options: q.options,
+    }]);
+    setInputValue('');
+    setSelectedOptions([]);
+  };
+
   const handleComplete = async () => {
     setIsProcessing(true);
+    stopAllVoice();
     
     setMessages(prev => [...prev, {
       id: `complete-${Date.now()}`,
@@ -887,7 +1058,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
   };
 
   const currentQuestion = CONVERSATION_FLOW[currentQuestionIndex.section]?.questions[currentQuestionIndex.question];
-  const progress = ((currentQuestionIndex.section * 100 + (currentQuestionIndex.question + 1) * (100 / CONVERSATION_FLOW[currentQuestionIndex.section]?.questions.length)) / CONVERSATION_FLOW.length);
+  const progress = reviewMode ? 100 : ((currentQuestionIndex.section * 100 + (currentQuestionIndex.question + 1) * (100 / CONVERSATION_FLOW[currentQuestionIndex.section]?.questions.length)) / CONVERSATION_FLOW.length);
 
   return (
     <Dialog open={open} onOpenChange={(openState) => { if (!openState) stopAllVoice(); onClose?.(); }}>
@@ -978,13 +1149,71 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             </div>
             <div className="flex items-center justify-between mt-2 text-xs">
               <span className="text-cyan-400 font-mono font-bold">{Math.round(progress)}% COMPLETE</span>
-              <span className="text-purple-400 font-mono">SECTION {currentQuestionIndex.section + 1}/{CONVERSATION_FLOW.length}</span>
+              <span className="text-purple-400 font-mono">{reviewMode ? 'REVIEW & EDIT' : `SECTION ${currentQuestionIndex.section + 1}/${CONVERSATION_FLOW.length}`}</span>
             </div>
           </div>
         </DialogHeader>
 
-        {/* Chat Messages */}
+        {/* Chat Messages or Review & Edit */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-black/30 relative z-10">
+          {reviewMode ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <p className="text-cyan-200 font-mono text-sm mb-4">
+                Review your answers. Voice input can sometimes capture incorrect values. Click Edit to correct any field.
+              </p>
+              <div className="grid gap-3">
+                {REVIEW_FIELDS.map(({ id, label, getValue }) => {
+                  const val = getValue(formData);
+                  const display = val != null && val !== '' ? String(val) : '—';
+                  return (
+                    <motion.div
+                      key={id}
+                      className="flex items-center justify-between gap-4 p-4 rounded-lg bg-black/50 border border-cyan-500/30 hover:border-cyan-400/50 transition-colors"
+                      whileHover={{ scale: 1.01 }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-cyan-400 font-mono text-xs block mb-1">{label}</span>
+                        <span className="text-cyan-100 text-sm truncate block">{display}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditField(id)}
+                        className="flex-shrink-0 border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400"
+                      >
+                        <Pencil className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                    </motion.div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  className="border-cyan-500/50 text-cyan-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleComplete()}
+                  className="bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white border-2 border-cyan-400"
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Submit Partner
+                </Button>
+              </div>
+            </motion.div>
+          ) : (
+          <>
           <AnimatePresence>
             {messages.map((message, idx) => (
               <motion.div
@@ -1106,6 +1335,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
           )}
 
           <div ref={messagesEndRef} />
+          </>
+          )}
         </div>
 
         {/* Uploaded Files Summary */}
@@ -1130,7 +1361,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
           </motion.div>
         )}
 
-        {/* Input Area - voice + keyboard combined */}
+        {/* Input Area - voice + keyboard combined (hidden in review mode) */}
+        {!reviewMode && (
         <div 
           className="px-6 py-4 border-t border-cyan-500/30 bg-black/70 relative z-10"
           onKeyDown={(e) => {
@@ -1251,6 +1483,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             </motion.div>
           )}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );
