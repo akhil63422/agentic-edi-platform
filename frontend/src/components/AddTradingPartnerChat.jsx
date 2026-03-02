@@ -577,12 +577,7 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             const matched = matchVoiceToOptions(answerText, q.options);
             answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
           }
-          setInputValue(answerText);
-          const display = answerText.slice(0, 50) + (answerText.length > 50 ? '...' : '');
-          toast.info(`Heard: "${display}". Edit if needed, then click Send.`, {
-            duration: 5000,
-            action: { label: 'Send now', onClick: () => handleSendMessage(null, answerText) },
-          });
+          setTimeout(() => handleAnswer(answerText, idx).catch(console.error), 100);
         }
         setIsListening(false);
       };
@@ -621,12 +616,8 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
               const matched = matchVoiceToOptions(answerText, q.options);
               answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
             }
-            setInputValue(answerText);
-            const display = answerText.slice(0, 50) + (answerText.length > 50 ? '...' : '');
-            toast.info(`Heard: "${display}". Edit if needed, then click Send.`, {
-              duration: 5000,
-              action: { label: 'Send now', onClick: () => handleSendMessage(null, answerText) },
-            });
+            await handleAnswer(answerText, idx);
+            toast.success('Voice recognized');
           } else {
             throw new Error(result?.error || 'No transcription');
           }
