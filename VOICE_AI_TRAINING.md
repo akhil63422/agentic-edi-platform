@@ -13,9 +13,9 @@ This document describes how to improve the Partner Setup voice AI for better acc
 - **Partner code normalization**: `normalizePartnerCode()` handles "one two three" → "123", "12 34 56" → "123456"
 
 ### Backend (partner_ai_service.py)
-- **Whisper** (openai/whisper-small by default): Speech-to-text on GPU. Set `WHISPER_MODEL=openai/whisper-medium` for even better accuracy (more VRAM).
-- **Rule-based extraction**: `_extract_info_rule_based()` with `_normalize_voice_option()` for option matching
-- **Context-aware**: Uses `current_question` to apply correct extraction rules
+- **Whisper** (openai/whisper-medium by default): Better accuracy than small (~5GB VRAM). Set `WHISPER_MODEL=openai/whisper-large-v3` for best (needs ~10GB VRAM).
+- **OpenAI Whisper API** (optional): Set `OPENAI_API_KEY` for cloud transcription - highest accuracy, no GPU needed. Tried first before local Whisper.
+- **Language**: Uses `language="en"` for English-only transcription (improves accuracy).
 
 ---
 

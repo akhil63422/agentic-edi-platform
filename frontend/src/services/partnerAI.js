@@ -23,11 +23,13 @@ export const partnerAIService = {
     return response.data;
   },
 
-  // Process voice input
-  processVoice: async (audioFile) => {
+  // Process voice input (context optional: { current_question } for backend)
+  processVoice: async (audioFile, context = {}) => {
     const formData = new FormData();
     formData.append('audio_file', audioFile);
-    
+    if (context.current_question) {
+      formData.append('current_question', context.current_question);
+    }
     const response = await api.post('/partners/ai/voice', formData);
     return response.data;
   },

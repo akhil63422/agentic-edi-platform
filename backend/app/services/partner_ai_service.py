@@ -47,7 +47,7 @@ class PartnerAIService:
         self.document_qa_model = None
         
         self.chat_model_name = "Qwen/Qwen2.5-7B-Instruct"
-        self.whisper_model_name = os.getenv("WHISPER_MODEL", "openai/whisper-small")  # small > base for accuracy
+        self.whisper_model_name = os.getenv("WHISPER_MODEL", "openai/whisper-medium")  # medium > small for accuracy (~5GB VRAM)
         self.document_model_name = "microsoft/layoutlmv3-base"
         self._system_prompt = None
         self._name_synonyms = {"one word": "oneworld"}
@@ -171,75 +171,91 @@ class PartnerAIService:
             logger.error(f"Error processing chat message: {e}")
             return self._extract_info_rule_based(message, context)
     
+    async def _transcribe_openai(self, audio_data: bytes, audio_format: str) -> Optional[str]:
+        """Use OpenAI Whisper API for higher accuracy (requires OPENAI_API_KEY)."""
+        try:
+            import tempfile
+            from openai import OpenAI
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                return None
+            client = OpenAI(api_key=api_key)
+            ext = "wav"
+            if "webm" in audio_format or "ogg" in audio_format:
+                ext = "webm"
+            elif "mp3" in audio_format or "mpeg" in audio_format:
+                ext = "mp3"
+            elif "mp4" in audio_format:
+                ext = "m4a"
+            with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as f:
+                f.write(audio_data)
+                tmp_path = f.name
+            try:
+                with open(tmp_path, "rb") as af:
+                    resp = client.audio.transcriptions.create(model="whisper-1", file=af, language="en")
+                return (resp.text or "").strip() if resp else None
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+        except Exception as e:
+            logger.warning(f"OpenAI Whisper fallback failed: {e}")
+            return None
+
     async def process_voice_input(
         self,
         audio_data: bytes,
-        audio_format: str = "wav"
+        audio_format: str = "wav",
+        context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Process voice input using Whisper model
-        
-        Args:
-            audio_data: Audio file bytes
-            audio_format: Audio format (wav, mp3, etc.)
-            
-        Returns:
-            Dict with transcribed text and extracted information
+        Process voice input - try OpenAI API first (if key set), else local Whisper.
+        Uses whisper-medium by default for better accuracy.
         """
         try:
+            # 1. Try OpenAI Whisper API first (best accuracy, requires OPENAI_API_KEY)
+            transcription = await self._transcribe_openai(audio_data, audio_format)
+            if transcription is not None:
+                return {"text": transcription, "extracted_data": {}, "confidence": 0.95}
+
+            # 2. Fall back to local Whisper (requires GPU)
             if not HF_AVAILABLE:
                 return {
                     "text": "",
-                    "error": "Voice input requires a GPU. Please type your message instead."
+                    "error": "Voice requires GPU or OPENAI_API_KEY. Set OPENAI_API_KEY for cloud transcription."
                 }
-            
-            self._load_whisper_model()
-            
-            if self.whisper_model is None:
-                return {
-                    "text": "",
-                    "error": "Whisper model not loaded"
-                }
-            
-            # Process audio (librosa supports wav, mp3, ogg; audioread adds webm if ffmpeg present)
-            import librosa
-            import numpy as np
 
-            audio_array, sample_rate = librosa.load(BytesIO(audio_data), sr=16000)
-            
-            # Process with Whisper
+            self._load_whisper_model()
+            if self.whisper_model is None:
+                return {"text": "", "error": "Whisper model not loaded. Set OPENAI_API_KEY for cloud fallback."}
+
+            import librosa
+            audio_array, sample_rate = librosa.load(BytesIO(audio_data), sr=16000, mono=True)
+            if len(audio_array) == 0:
+                return {"text": "", "error": "Empty or invalid audio"}
+
             inputs = self.whisper_processor(
-                audio_array,
-                sampling_rate=sample_rate,
-                return_tensors="pt"
+                audio_array, sampling_rate=sample_rate, return_tensors="pt"
             ).to(self.device)
-            
+            input_features = inputs.get("input_features") or inputs.get("input_ids")
+            if input_features is None:
+                input_features = inputs[list(inputs.keys())[0]]
+
             with torch.no_grad():
                 generated_ids = self.whisper_model.generate(
-                    inputs["input_features"],
-                    max_length=448
+                    input_features, max_length=448, language="en", task="transcribe"
                 )
-            
+
             transcription = self.whisper_processor.batch_decode(
-                generated_ids,
-                skip_special_tokens=True
+                generated_ids, skip_special_tokens=True
             )[0]
-            
-            # Extract information from transcribed text
-            extracted_data = self._extract_partner_info(transcription, "", {})
-            
-            return {
-                "text": transcription,
-                "extracted_data": extracted_data,
-                "confidence": 0.90
-            }
-            
+
+            return {"text": transcription.strip(), "extracted_data": {}, "confidence": 0.90}
+
         except Exception as e:
             logger.error(f"Error processing voice input: {e}")
-            return {
-                "text": "",
-                "error": str(e)
-            }
+            return {"text": "", "error": str(e)}
     
     async def process_document_upload(
         self,

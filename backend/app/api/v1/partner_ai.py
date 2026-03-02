@@ -159,31 +159,25 @@ async def process_chat(
 async def process_voice(
     request: Request,
     audio_file: UploadFile = File(...),
+    current_question: Optional[str] = Form(None),
     db=Depends(get_database)
 ):
     """
-    Process voice input and extract partner information
-    
-    Args:
-        audio_file: Audio file (wav, mp3, etc.)
-        
-    Returns:
-        Transcribed text and extracted partner data
+    Process voice input - transcribe and return text.
+    Context (current_question) used for better handling when available.
     """
     try:
-        # Get optional user (for audit logging if authenticated)
         current_user = None
         if request:
             current_user = await get_optional_user(request)
         
-        # Read audio file
         audio_data = await audio_file.read()
         audio_format = audio_file.content_type or "audio/wav"
         
-        # Process voice
         result = await partner_ai_service.process_voice_input(
             audio_data=audio_data,
-            audio_format=audio_format
+            audio_format=audio_format,
+            context={"current_question": current_question} if current_question else None
         )
         
         if result.get("error"):

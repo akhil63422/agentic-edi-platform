@@ -567,7 +567,6 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       recognitionRef.current.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         if (transcript?.trim()) {
-          setInputValue(transcript);
           const idx = currentQuestionIndexRef.current;
           const q = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question];
           let answerText = transcript.trim();
@@ -578,7 +577,12 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
             const matched = matchVoiceToOptions(answerText, q.options);
             answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
           }
-          setTimeout(() => handleAnswer(answerText, idx).catch(console.error), 100);
+          setInputValue(answerText);
+          const display = answerText.slice(0, 50) + (answerText.length > 50 ? '...' : '');
+          toast.info(`Heard: "${display}". Edit if needed, then click Send.`, {
+            duration: 5000,
+            action: { label: 'Send now', onClick: () => handleSendMessage(null, answerText) },
+          });
         }
         setIsListening(false);
       };
@@ -602,24 +606,14 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+        toast.info('Transcribing...', { duration: 2000 });
         try {
-          const result = await partnerAIService.processVoice(blob);
+          const idx = currentQuestionIndexRef.current;
+          const q = CONVERSATION_FLOW[idx?.section]?.questions[idx?.question];
+          const result = await partnerAIService.processVoice(blob, { current_question: q?.id });
           if (result?.success && result?.text?.trim()) {
             setIsListening(false);
-            const extracted = result.extracted_data || {};
-            const updates = {};
-            if (extracted.business_name) updates.businessName = extracted.business_name;
-            if (extracted.partner_code) updates.partnerCode = extracted.partner_code.toUpperCase();
-            if (extracted.role) updates.role = extracted.role;
-            if (extracted.industry) updates.industry = extracted.industry;
-            if (extracted.country) updates.country = extracted.country;
-            const fd = formDataRef.current;
-            if (extracted.email) updates.businessContact = { ...(fd.businessContact || {}), email: extracted.email };
-            if (extracted.phone) updates.businessContact = { ...(updates.businessContact || fd.businessContact || {}), phone: extracted.phone };
-            if (Object.keys(updates).length) setFormData((prev) => ({ ...prev, ...updates }));
-            const idx = currentQuestionIndexRef.current;
-            const q = CONVERSATION_FLOW[idx.section]?.questions[idx.question];
-            let answerText = result.text?.trim() || '';
+            let answerText = result.text.trim();
             if (q?.id === 'partnerCode') answerText = normalizePartnerCode(answerText) || answerText;
             else if (/Email|email/i.test(q?.id || '')) answerText = normalizeEmailForVoice(answerText) || answerText;
             else if (/Phone|phone/i.test(q?.id || '')) answerText = normalizePhoneForVoice(answerText) || answerText;
@@ -627,8 +621,12 @@ export const AddTradingPartnerChat = ({ open, onClose, onComplete }) => {
               const matched = matchVoiceToOptions(answerText, q.options);
               answerText = Array.isArray(matched) ? matched.join(', ') : (matched || answerText);
             }
-            await handleAnswer(answerText, idx);
-            toast.success('Voice recognized by AI');
+            setInputValue(answerText);
+            const display = answerText.slice(0, 50) + (answerText.length > 50 ? '...' : '');
+            toast.info(`Heard: "${display}". Edit if needed, then click Send.`, {
+              duration: 5000,
+              action: { label: 'Send now', onClick: () => handleSendMessage(null, answerText) },
+            });
           } else {
             throw new Error(result?.error || 'No transcription');
           }

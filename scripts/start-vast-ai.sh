@@ -42,4 +42,7 @@ sleep 1
 
 echo ">>> Starting backend..."
 cd backend
+# Voice: whisper-medium (default) for better accuracy. Set WHISPER_MODEL=openai/whisper-large-v3 for best (needs ~10GB VRAM).
+# Optional: OPENAI_API_KEY for cloud Whisper (highest accuracy, no GPU needed).
+export WHISPER_MODEL="${WHISPER_MODEL:-openai/whisper-medium}"
 exec uvicorn app.main:app --host 0.0.0.0 --port 8001
