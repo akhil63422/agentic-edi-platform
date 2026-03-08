@@ -3,13 +3,14 @@ from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.models.exception import Exception, ExceptionCreate, ExceptionUpdate
 from app.models.audit import AuditLogCreate
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/exceptions", tags=["exceptions"])
+router = APIRouter(prefix="/exceptions", tags=["exceptions"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 @router.get("/", response_model=List[Exception])

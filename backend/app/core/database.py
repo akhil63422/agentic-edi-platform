@@ -6,26 +6,30 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Database:
-    client: AsyncIOMotorClient = None
+    client = None
 
 db = Database()
 
 async def connect_to_mongo():
-    """Create database connection"""
+    """Create database connection — falls back to in-memory mock if MongoDB is unavailable"""
     try:
-        # Local MongoDB (mongodb://) - no TLS. Atlas (mongodb+srv://) - use certifi for SSL
         is_local = settings.MONGODB_URL.strip().lower().startswith("mongodb://localhost") or settings.MONGODB_URL.strip().lower().startswith("mongodb://127.0.0.1")
-        kwargs = {"serverSelectionTimeoutMS": 30000}
+        kwargs = {"serverSelectionTimeoutMS": 5000}
         if not is_local:
             import certifi
             kwargs["tlsCAFile"] = certifi.where()
         db.client = AsyncIOMotorClient(settings.MONGODB_URL, **kwargs)
-        # Test connection
         await db.client.admin.command('ping')
         logger.info("Connected to MongoDB")
-    except ConnectionFailure as e:
-        logger.error(f"Failed to connect to MongoDB: {e}")
-        raise
+    except Exception as e:
+        logger.warning(f"MongoDB unavailable ({e}), falling back to in-memory mock database")
+        try:
+            import mongomock_motor
+            db.client = mongomock_motor.AsyncMongoMockClient()
+            logger.info("Using in-memory mock database (data will not persist)")
+        except ImportError:
+            logger.error("mongomock_motor not installed — cannot start without MongoDB")
+            raise
 
 async def close_mongo_connection():
     """Close database connection"""

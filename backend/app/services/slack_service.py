@@ -38,7 +38,7 @@ class SlackService:
         self,
         text: str,
         blocks: Optional[list] = None,
-        username: str = "EDI Platform",
+        username: str = "Agent Eddy",
         icon_emoji: str = ":inbox_tray:",
     ) -> bool:
         """Send a message to Slack. Returns True if sent, False otherwise."""

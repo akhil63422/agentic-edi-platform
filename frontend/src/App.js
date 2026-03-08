@@ -26,6 +26,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/document/:id" element={<DocumentDetail />} />
+            <Route path="/document/:id/review" element={<DocumentDetail />} />
             <Route path="/mapper" element={<Mapper />} />
             <Route path="/playground" element={<Playground />} />
             <Route path="/inbound" element={<InboundEDI />} />

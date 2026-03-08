@@ -1,15 +1,26 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.models.mapping import Mapping, MappingCreate, MappingUpdate
 from app.models.audit import AuditLogCreate
+from pydantic import BaseModel
 import logging
+import os
+import json
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/mappings", tags=["mappings"])
+router = APIRouter(prefix="/mappings", tags=["mappings"], dependencies=[Depends(require_auth_if_enabled)])
+
+
+class MappingSuggestRequest(BaseModel):
+    source_fields: List[str]
+    document_type: Optional[str] = "850"
+    standard: Optional[str] = "X12"
+    partner_id: Optional[str] = None
 
 
 @router.get("/", response_model=List[Mapping])
@@ -177,3 +188,181 @@ async def delete_mapping(mapping_id: str, db=Depends(get_database)):
     except Exception as e:
         logger.error(f"Error deleting mapping {mapping_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Canonical target fields per transaction set ──────────────────────────────
+_CANONICAL_FIELDS: Dict[str, List[str]] = {
+    "850": [
+        "purchase_order_number", "order_date", "buyer_name", "seller_name",
+        "ship_to_address", "bill_to_address", "currency", "total_amount",
+        "line_items.line_number", "line_items.product_id", "line_items.description",
+        "line_items.quantity", "line_items.unit_price", "line_items.unit_of_measure",
+        "ship_date", "delivery_date", "payment_terms",
+    ],
+    "856": [
+        "ship_notice_id", "shipment_date", "shipment_time", "shipment_id",
+        "tracking_number", "carrier", "ship_to.name", "ship_to.address",
+        "ship_from.name", "ship_from.address", "items.item_id",
+        "items.description", "items.quantity", "items.unit_of_measure",
+        "pro_number", "seal_number", "packaging_type",
+    ],
+    "810": [
+        "invoice_number", "invoice_date", "purchase_order_ref",
+        "vendor_name", "buyer_name", "subtotal", "tax_amount", "total_due",
+        "line_items.line_number", "line_items.product_id", "line_items.description",
+        "line_items.quantity", "line_items.unit_price", "line_items.line_total",
+        "payment_due_date", "remit_to_address", "discount_amount",
+    ],
+    "997": ["transaction_set_id", "functional_group_id", "acknowledgment_code", "error_code"],
+    "855": [
+        "purchase_order_number", "acknowledgment_type", "acknowledgment_date",
+        "vendor_name", "buyer_name", "status",
+        "line_items.line_number", "line_items.product_id", "line_items.quantity_acknowledged",
+    ],
+}
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Compute cosine similarity between two embedding vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x ** 2 for x in a) ** 0.5
+    norm_b = sum(x ** 2 for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+async def _embed_texts(texts: List[str], api_key: str) -> Optional[List[List[float]]]:
+    """Embed a list of texts using OpenAI text-embedding-3-small."""
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        response = await client.embeddings.create(
+            model="text-embedding-3-small",
+            input=texts,
+        )
+        return [item.embedding for item in response.data]
+    except Exception as e:
+        logger.warning(f"Embedding request failed: {e}")
+        return None
+
+
+@router.post("/suggest")
+async def suggest_mappings(data: MappingSuggestRequest):
+    """
+    Suggest canonical target field mappings for a list of source EDI field names.
+
+    Uses OpenAI text-embedding-3-small (cosine similarity) when OPENAI_API_KEY is set.
+    Falls back to keyword heuristics otherwise.
+
+    Returns a list of {source_field, suggested_target, confidence, reason}.
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    doc_type = (data.document_type or "850").replace("X12 ", "").replace("EDIFACT ", "").split()[0]
+    target_fields = _CANONICAL_FIELDS.get(doc_type, _CANONICAL_FIELDS["850"])
+
+    suggestions = []
+
+    if api_key and data.source_fields:
+        # Embed source fields + target fields together
+        all_texts = data.source_fields + target_fields
+        embeddings = await _embed_texts(all_texts, api_key)
+
+        if embeddings:
+            src_embeddings = embeddings[:len(data.source_fields)]
+            tgt_embeddings = embeddings[len(data.source_fields):]
+
+            for i, src_field in enumerate(data.source_fields):
+                sims = [
+                    (_cosine_similarity(src_embeddings[i], tgt_embeddings[j]), target_fields[j])
+                    for j in range(len(target_fields))
+                ]
+                sims.sort(reverse=True)
+                best_sim, best_target = sims[0]
+                second_sim, second_target = sims[1] if len(sims) > 1 else (0, "")
+
+                suggestions.append({
+                    "source_field": src_field,
+                    "suggested_target": best_target,
+                    "confidence": round(best_sim, 4),
+                    "alternatives": [
+                        {"field": second_target, "confidence": round(second_sim, 4)},
+                    ] if second_sim > 0.5 else [],
+                    "reason": f"Embedding cosine similarity: {best_sim:.2%}",
+                    "method": "embedding",
+                })
+
+            # For low-confidence suggestions, use GPT-4o to improve
+            low_conf = [s for s in suggestions if s["confidence"] < 0.70]
+            if low_conf:
+                try:
+                    from openai import AsyncOpenAI
+                    client = AsyncOpenAI(api_key=api_key)
+                    prompt = (
+                        f"Map these EDI source fields to the closest canonical target field "
+                        f"for an X12 {doc_type} transaction set.\n\n"
+                        f"Source fields: {json.dumps([s['source_field'] for s in low_conf])}\n"
+                        f"Available canonical fields: {json.dumps(target_fields)}\n\n"
+                        "Respond with a JSON array: "
+                        '[{"source_field": "...", "target_field": "...", "confidence": 0.0-1.0, "reason": "..."}]'
+                    )
+                    resp = await client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are an EDI field mapping expert. Always respond with valid JSON only."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=600,
+                        temperature=0.2,
+                    )
+                    content = json.loads(resp.choices[0].message.content.strip())
+                    llm_suggestions = content if isinstance(content, list) else content.get("mappings", [])
+                    llm_map = {s["source_field"]: s for s in llm_suggestions}
+                    for s in suggestions:
+                        if s["source_field"] in llm_map:
+                            llm = llm_map[s["source_field"]]
+                            if llm.get("confidence", 0) > s["confidence"]:
+                                s["suggested_target"] = llm.get("target_field", s["suggested_target"])
+                                s["confidence"] = llm.get("confidence", s["confidence"])
+                                s["reason"] = llm.get("reason", s["reason"]) + " (LLM enhanced)"
+                                s["method"] = "embedding+llm"
+                except Exception as e:
+                    logger.warning(f"LLM mapping enhancement failed: {e}")
+
+            return {"suggestions": suggestions, "method": "embedding", "model": "text-embedding-3-small"}
+
+    # ── Keyword heuristic fallback ──────────────────────────────────────────
+    KEYWORD_MAP = {
+        "po": "purchase_order_number", "ponumber": "purchase_order_number",
+        "order": "purchase_order_number", "orderdate": "order_date",
+        "buyer": "buyer_name", "customer": "buyer_name",
+        "seller": "seller_name", "vendor": "vendor_name",
+        "shipto": "ship_to.name", "shipfrom": "ship_from.name",
+        "qty": "line_items.quantity", "quantity": "line_items.quantity",
+        "price": "line_items.unit_price", "unitprice": "line_items.unit_price",
+        "item": "line_items.product_id", "sku": "line_items.product_id",
+        "total": "total_amount", "amount": "total_amount",
+        "invoice": "invoice_number", "invoicedate": "invoice_date",
+        "ship": "ship_notice_id", "track": "tracking_number",
+        "carrier": "carrier",
+    }
+    for src in data.source_fields:
+        key = src.lower().replace("_", "").replace(" ", "").replace("-", "")
+        target = None
+        for kw, tgt in KEYWORD_MAP.items():
+            if kw in key or key in kw:
+                target = tgt
+                break
+        if not target:
+            target = target_fields[0] if target_fields else src
+        suggestions.append({
+            "source_field": src,
+            "suggested_target": target,
+            "confidence": 0.6,
+            "alternatives": [],
+            "reason": "Keyword heuristic match",
+            "method": "heuristic",
+        })
+
+    return {"suggestions": suggestions, "method": "heuristic"}

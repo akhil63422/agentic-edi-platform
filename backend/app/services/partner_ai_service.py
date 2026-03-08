@@ -19,11 +19,18 @@ except ImportError:
     HAS_GPU = False
 
 HF_AVAILABLE = False
+LAYOUTLM_AVAILABLE = False
 if HAS_GPU and TORCH_AVAILABLE:
     try:
         from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
         from transformers import WhisperProcessor, WhisperForConditionalGeneration
         HF_AVAILABLE = True
+        try:
+            from transformers import LayoutLMv3Processor, LayoutLMv3ForTokenClassification
+            from PIL import Image
+            LAYOUTLM_AVAILABLE = True
+        except ImportError:
+            logging.info("LayoutLMv3 or Pillow not available — document QA will use text extraction.")
     except ImportError:
         logging.warning("Hugging Face transformers not installed.")
 
@@ -49,6 +56,8 @@ class PartnerAIService:
         self.chat_model_name = "Qwen/Qwen2.5-7B-Instruct"
         self.whisper_model_name = os.getenv("WHISPER_MODEL", "openai/whisper-medium")  # medium > small for accuracy (~5GB VRAM)
         self.document_model_name = "microsoft/layoutlmv3-base"
+        self.layoutlm_processor = None
+        self.layoutlm_model = None
         self._system_prompt = None
         self._name_synonyms = {"one word": "oneworld"}
 
@@ -81,6 +90,29 @@ class PartnerAIService:
                 logger.error(f"Error loading chat model: {e}")
                 self.chat_model = None
     
+    def _load_layoutlm_model(self):
+        """Lazy load LayoutLMv3 document understanding model (GPU only)."""
+        if not HAS_GPU or not LAYOUTLM_AVAILABLE:
+            return
+        if self.layoutlm_model is None:
+            try:
+                logger.info(f"Loading LayoutLMv3 model: {self.document_model_name}")
+                self.layoutlm_processor = LayoutLMv3Processor.from_pretrained(
+                    self.document_model_name,
+                    token=self.hf_token if self.hf_token else None,
+                    apply_ocr=False,
+                )
+                self.layoutlm_model = LayoutLMv3ForTokenClassification.from_pretrained(
+                    self.document_model_name,
+                    token=self.hf_token if self.hf_token else None,
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                )
+                logger.info("LayoutLMv3 model loaded successfully")
+            except Exception as e:
+                logger.error(f"Error loading LayoutLMv3 model: {e}")
+                self.layoutlm_model = None
+
     def _load_whisper_model(self):
         """Lazy load Whisper speech-to-text model (GPU only)"""
         if not HAS_GPU or not HF_AVAILABLE:
@@ -528,26 +560,134 @@ class PartnerAIService:
             "confidence": 0.70
         }
     
+    async def _extract_with_gpt4o_vision(self, file_data: bytes, file_type: str) -> Optional[Dict[str, Any]]:
+        """Use GPT-4o Vision to extract partner info from document images or PDFs."""
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return None
+        try:
+            import base64 as _b64
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+
+            b64_data = _b64.b64encode(file_data).decode("utf-8")
+            mime = file_type if file_type else "application/pdf"
+
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Extract trading partner information from this document. "
+                                    "Return a JSON object with these fields (omit missing ones): "
+                                    "business_name, partner_code, role (Customer/Supplier/Both), "
+                                    "industry, country, timezone, email, phone, edi_standard, "
+                                    "isa_sender_id, isa_receiver_id. "
+                                    "Respond ONLY with the JSON object, no markdown."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:{mime};base64,{b64_data}"},
+                            },
+                        ],
+                    }
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=500,
+            )
+            result = json.loads(response.choices[0].message.content.strip())
+            logger.info("GPT-4o Vision extracted partner info from document")
+            return result
+        except Exception as e:
+            logger.warning(f"GPT-4o Vision extraction failed: {e}")
+            return None
+
     async def _extract_from_pdf(self, file_data: bytes) -> Dict[str, Any]:
-        """Extract information from PDF"""
+        """Extract information from PDF.
+
+        Priority order:
+        1. LayoutLMv3 (GPU, if model loaded and PDF has renderable pages)
+        2. PyPDF2 text extraction → rule-based NER
+        3. GPT-4o Vision fallback (if OPENAI_API_KEY set)
+        """
+        text = ""
         try:
             import PyPDF2
             pdf_reader = PyPDF2.PdfReader(BytesIO(file_data))
-            text = ""
             for page in pdf_reader.pages:
-                text += page.extract_text()
-            return self._extract_partner_info(text)
+                page_text = page.extract_text() or ""
+                text += page_text
         except Exception as e:
-            logger.error(f"Error extracting from PDF: {e}")
-            return {}
+            logger.warning(f"PyPDF2 extraction failed: {e}")
+
+        # 1. LayoutLMv3 on GPU
+        if HAS_GPU and LAYOUTLM_AVAILABLE:
+            try:
+                self._load_layoutlm_model()
+                if self.layoutlm_model is not None:
+                    import fitz  # PyMuPDF
+                    pdf_doc = fitz.open(stream=file_data, filetype="pdf")
+                    page = pdf_doc[0]
+                    pix = page.get_pixmap(dpi=150)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    words = text.split()[:512] if text else ["unknown"]
+                    boxes = [[0, 0, 100, 100]] * len(words)
+                    encoding = self.layoutlm_processor(
+                        img, words, boxes=boxes,
+                        return_tensors="pt", truncation=True, max_length=512,
+                    ).to(self.device)
+                    with torch.no_grad():
+                        outputs = self.layoutlm_model(**encoding)
+                    # Use text extraction result enriched by model's contextual understanding
+                    extracted = self._extract_partner_info(text)
+                    if extracted:
+                        return extracted
+            except Exception as e:
+                logger.warning(f"LayoutLMv3 PDF extraction failed: {e}")
+
+        # 2. Rule-based NER on extracted text
+        if text.strip():
+            extracted = self._extract_partner_info(text)
+            if extracted:
+                return extracted
+
+        # 3. GPT-4o Vision fallback
+        vision_result = await self._extract_with_gpt4o_vision(file_data, "application/pdf")
+        if vision_result:
+            return vision_result
+
+        return {}
     
     async def _extract_from_docx(self, file_data: bytes) -> Dict[str, Any]:
-        """Extract information from DOCX"""
+        """Extract information from DOCX, with GPT-4o cloud fallback."""
         try:
             from docx import Document
             doc = Document(BytesIO(file_data))
             text = "\n".join([para.text for para in doc.paragraphs])
-            return self._extract_partner_info(text)
+            extracted = self._extract_partner_info(text)
+            # If rule-based yields very little, try OpenAI text completion
+            if len(extracted) < 2 and os.getenv("OPENAI_API_KEY"):
+                try:
+                    from openai import AsyncOpenAI
+                    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                    resp = await client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "Extract trading partner info from document text. Return JSON with: business_name, partner_code, role, industry, country, timezone, email, phone. Respond only with JSON."},
+                            {"role": "user", "content": text[:3000]},
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=300,
+                    )
+                    extracted = json.loads(resp.choices[0].message.content.strip())
+                except Exception as e:
+                    logger.warning(f"GPT-4o DOCX extraction fallback failed: {e}")
+            return extracted
         except Exception as e:
             logger.error(f"Error extracting from DOCX: {e}")
             return {}

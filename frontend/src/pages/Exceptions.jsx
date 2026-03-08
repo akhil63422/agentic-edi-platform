@@ -102,7 +102,7 @@ export const Exceptions = () => {
       if (filters.severity !== 'all') params.severity = filters.severity;
       if (filters.exceptionType !== 'all') params.exception_type = filters.exceptionType;
       
-      const data = await exceptionsService.getAll(params);
+      const data = await exceptionsService.getAll({ ...params, forceApi: true });
       
       // Ensure data is an array
       if (!Array.isArray(data)) {
@@ -167,7 +167,7 @@ export const Exceptions = () => {
       
       // Update KPIs
       try {
-        const allExceptions = await exceptionsService.getAll({ limit: 1000 });
+        const allExceptions = await exceptionsService.getAll({ limit: 1000, forceApi: true });
         if (!Array.isArray(allExceptions)) {
           console.warn('Invalid KPI data format, using current page data');
           // Use current page data for KPIs
@@ -356,132 +356,6 @@ export const Exceptions = () => {
       setLoading(false);
     }
   };
-
-  // Mock exception data fallback
-  const mockExceptions = [
-    {
-      id: 'EXC_001',
-      fileId: 'PO_8932',
-      partner: 'Walmart',
-      docType: 'X12 850',
-      exceptionType: 'Low Confidence',
-      severity: 'Medium',
-      status: 'Open',
-      confidence: 72,
-      description: 'AI detected format mismatch in PO number field',
-      aiSuggestion: 'PO893245 → PO-893245',
-      createdAt: '2024-01-15 10:20',
-      createdTime: '10:20 AM',
-      assignedTo: 'Unassigned',
-    },
-    {
-      id: 'EXC_002',
-      fileId: 'INV_4521',
-      partner: 'Target',
-      docType: 'X12 810',
-      exceptionType: 'Validation Error',
-      severity: 'High',
-      status: 'In Review',
-      confidence: 45,
-      description: 'Missing required field: Invoice Date',
-      aiSuggestion: 'Add date from document header',
-      createdAt: '2024-01-15 09:45',
-      createdTime: '09:45 AM',
-      assignedTo: 'John Doe',
-    },
-    {
-      id: 'EXC_003',
-      fileId: 'ASN_7834',
-      partner: 'Amazon',
-      docType: 'X12 856',
-      exceptionType: 'Mapping Error',
-      severity: 'Medium',
-      status: 'Open',
-      confidence: 68,
-      description: 'Unable to map line item quantity to canonical format',
-      aiSuggestion: 'Verify quantity format matches partner spec',
-      createdAt: '2024-01-15 08:30',
-      createdTime: '08:30 AM',
-      assignedTo: 'Unassigned',
-    },
-    {
-      id: 'EXC_004',
-      fileId: 'PO_8933',
-      partner: 'Walmart',
-      docType: 'X12 850',
-      exceptionType: 'Business Rule Violation',
-      severity: 'Critical',
-      status: 'Open',
-      confidence: 35,
-      description: 'PO amount exceeds credit limit for partner',
-      aiSuggestion: 'Requires manual approval before processing',
-      createdAt: '2024-01-15 07:15',
-      createdTime: '07:15 AM',
-      assignedTo: 'Unassigned',
-    },
-    {
-      id: 'EXC_005',
-      fileId: 'INV_4520',
-      partner: 'Home Depot',
-      docType: 'X12 810',
-      exceptionType: 'Low Confidence',
-      severity: 'Low',
-      status: 'Resolved',
-      confidence: 78,
-      description: 'Unusual date format detected',
-      aiSuggestion: 'Date format corrected: YYYYMMDD → YYYY-MM-DD',
-      createdAt: '2024-01-14 16:20',
-      createdTime: '04:20 PM',
-      resolvedAt: '2024-01-14 16:45',
-      assignedTo: 'Jane Smith',
-    },
-    {
-      id: 'EXC_006',
-      fileId: 'PO_8934',
-      partner: 'Costco',
-      docType: 'X12 850',
-      exceptionType: 'Data Quality',
-      severity: 'Medium',
-      status: 'Open',
-      confidence: 65,
-      description: 'Product code format inconsistent with historical data',
-      aiSuggestion: 'Verify product code matches catalog',
-      createdAt: '2024-01-14 14:10',
-      createdTime: '02:10 PM',
-      assignedTo: 'Unassigned',
-    },
-    {
-      id: 'EXC_007',
-      fileId: 'ASN_7835',
-      partner: 'Kroger',
-      docType: 'X12 856',
-      exceptionType: 'Transport Error',
-      severity: 'High',
-      status: 'Resolved',
-      confidence: 0,
-      description: 'File transmission failed - connection timeout',
-      aiSuggestion: 'Retry transmission successful',
-      createdAt: '2024-01-14 11:30',
-      createdTime: '11:30 AM',
-      resolvedAt: '2024-01-14 11:45',
-      assignedTo: 'System',
-    },
-    {
-      id: 'EXC_008',
-      fileId: 'INV_4519',
-      partner: 'Target',
-      docType: 'X12 810',
-      exceptionType: 'Low Confidence',
-      severity: 'Low',
-      status: 'Open',
-      confidence: 82,
-      description: 'Tax calculation method unclear',
-      aiSuggestion: 'Apply standard tax rate based on location',
-      createdAt: '2024-01-14 09:00',
-      createdTime: '09:00 AM',
-      assignedTo: 'Unassigned',
-    },
-  ];
 
   const itemsPerPage = 50;
   const totalItems = exceptions.length;

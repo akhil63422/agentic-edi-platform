@@ -48,7 +48,7 @@ export const KPICard = ({ title, value, subtitle, trend, trendValue, variant = '
             <div className="flex-1">
               <p className="text-xs font-mono font-bold text-cyan-400/70 mb-2 uppercase tracking-wider">{title}</p>
               <div className="flex items-baseline space-x-2">
-                <h3 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent font-mono">{value}</h3>
+                <h3 className="text-3xl font-bold text-white">{value}</h3>
                 {trendValue && (
                   <div className={`flex items-center space-x-1 text-sm font-bold font-mono ${getTrendColor()}`}>
                     {getTrendIcon()}

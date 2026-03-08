@@ -21,6 +21,8 @@ class Exception(BaseModel):
     resolution_action: Optional[str] = None
     resolved_by: Optional[str] = None
     resolved_at: Optional[datetime] = None
+    sla_breach: bool = False  # True when exception exceeds SLA threshold
+    sla_hours_threshold: Optional[int] = None  # Hours for this severity
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     tags: List[str] = Field(default_factory=list)

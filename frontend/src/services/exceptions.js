@@ -2,21 +2,24 @@ import api from './api';
 import { localDataStore } from '@/store/localDataStore';
 
 export const exceptionsService = {
-  // Get all exceptions (uses localStorage when imported data exists)
+  // Get all exceptions (uses localStorage when imported data exists, unless forceApi=true)
   getAll: async (params = {}) => {
-    const data = localDataStore.getData();
-    if (data && data.exceptions?.length > 0) {
-      return localDataStore.filterExceptions(data.exceptions, {
-        skip: params.skip ?? 0,
-        limit: params.limit ?? 100,
-        status: params.status,
-        severity: params.severity,
-        exception_type: params.exception_type,
-        partner_id: params.partner_id,
-        document_id: params.document_id,
-      });
+    const { forceApi, ...rest } = params;
+    if (!forceApi) {
+      const data = localDataStore.getData();
+      if (data && data.exceptions?.length > 0) {
+        return localDataStore.filterExceptions(data.exceptions, {
+          skip: rest.skip ?? 0,
+          limit: rest.limit ?? 100,
+          status: rest.status,
+          severity: rest.severity,
+          exception_type: rest.exception_type,
+          partner_id: rest.partner_id,
+          document_id: rest.document_id,
+        });
+      }
     }
-    const { skip = 0, limit = 100, status, severity, exception_type, partner_id, document_id } = params;
+    const { skip = 0, limit = 100, status, severity, exception_type, partner_id, document_id } = rest;
     const queryParams = new URLSearchParams({
       skip: skip.toString(),
       limit: limit.toString(),

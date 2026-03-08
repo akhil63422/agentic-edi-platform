@@ -9,11 +9,11 @@ import logging
 from app.services.partner_ai_service import partner_ai_service
 from app.core.database import get_database
 from app.models.partner import TradingPartnerCreate
-from app.api.v1.dependencies import require_operator, get_optional_user
+from app.api.v1.dependencies import require_operator, get_optional_user, require_auth_if_enabled
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/partners/ai", tags=["partner-ai"])
+router = APIRouter(prefix="/partners/ai", tags=["partner-ai"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 @router.get("/config")

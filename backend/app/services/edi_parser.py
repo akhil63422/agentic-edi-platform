@@ -66,8 +66,8 @@ class X12Parser(EDIParser):
                 if not segment:
                     continue
                 
-                segment_id = segment[:3]
                 elements = segment.split(self.element_delimiter)
+                segment_id = elements[0]
                 
                 segment_data = {
                     "segment_id": segment_id,

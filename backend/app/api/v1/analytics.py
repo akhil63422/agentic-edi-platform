@@ -3,11 +3,12 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 @router.get("/dashboard")
@@ -217,4 +218,81 @@ async def get_partner_performance(
     
     except Exception as e:
         logger.error(f"Error fetching partner performance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# SLA thresholds per severity (hours)
+SLA_HOURS = {"Critical": 1, "High": 4, "Medium": 24, "Low": 72}
+
+
+@router.get("/sla")
+async def get_sla_analytics(
+    days: int = Query(7, ge=1, le=365),
+    db=Depends(get_database)
+):
+    """Get SLA compliance and breach list."""
+    try:
+        from app.services.exception_engine import exception_engine
+
+        start_date = datetime.utcnow() - timedelta(days=days)
+        now = datetime.utcnow()
+
+        # Get all exceptions in period
+        total = await db.exceptions.count_documents({"created_at": {"$gte": start_date}})
+        resolved = await db.exceptions.count_documents({
+            "created_at": {"$gte": start_date},
+            "status": "Resolved",
+        })
+        # Exceptions that were resolved within SLA
+        sla_ok = 0
+        breaches = []
+
+        for severity, hours in SLA_HOURS.items():
+            threshold = now - timedelta(hours=hours)
+            open_past_sla = await db.exceptions.find({
+                "severity": severity,
+                "status": {"$in": ["Open", "In Review"]},
+                "created_at": {"$lt": threshold},
+            }).to_list(length=500)
+            for exc in open_past_sla:
+                exc_id = str(exc["_id"])
+                hours_overdue = (now - exc["created_at"]).total_seconds() / 3600
+                breaches.append({
+                    "exception_id": exc_id,
+                    "document_id": exc.get("document_id"),
+                    "partner_id": exc.get("partner_id"),
+                    "severity": severity,
+                    "sla_hours": hours,
+                    "hours_overdue": round(hours_overdue, 1),
+                    "exception_type": exc.get("exception_type"),
+                    "created_at": exc.get("created_at").isoformat() if exc.get("created_at") else None,
+                })
+                await db.exceptions.update_one(
+                    {"_id": exc["_id"]},
+                    {"$set": {"sla_breach": True, "sla_hours_threshold": hours, "updated_at": now}},
+                )
+
+        # Resolved within SLA: count resolved exceptions that were resolved before threshold
+        for severity, hours in SLA_HOURS.items():
+            resolved_in_time = await db.exceptions.count_documents({
+                "severity": severity,
+                "status": "Resolved",
+                "created_at": {"$gte": start_date},
+                "resolved_at": {"$exists": True, "$ne": None},
+                "$expr": {"$lte": [{"$subtract": ["$resolved_at", "$created_at"]}, hours * 3600 * 1000]},
+            })
+            sla_ok += resolved_in_time
+
+        compliance_pct = round((sla_ok / resolved * 100) if resolved > 0 else 100, 2)
+
+        return {
+            "period_days": days,
+            "sla_compliance_pct": compliance_pct,
+            "total_exceptions": total,
+            "resolved": resolved,
+            "breach_count": len(breaches),
+            "breaches": breaches[:50],
+        }
+    except Exception as e:
+        logger.error(f"Error fetching SLA analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))

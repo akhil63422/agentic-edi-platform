@@ -4,17 +4,19 @@ import {
   Eye, EyeOff, Maximize2, Minimize2,
   Trophy, Target, Zap, Activity,
   CheckCircle, AlertCircle, RotateCcw, Cpu,
-  Loader2, Award,
+  Loader2, Award, Sparkles, X, ChevronRight,
 } from 'lucide-react';
 import { useMapperStore, NODE_LIBRARY, ICON_MAP } from '../store/mapperStore';
+import api from '../services/api';
 
-/* ─── colour maps (Tailwind can't interpolate dynamic class names) ─── */
-const BG   = { blue:'bg-blue-500', purple:'bg-purple-500', amber:'bg-amber-500', yellow:'bg-yellow-500', green:'bg-green-500', emerald:'bg-emerald-500', orange:'bg-orange-500', pink:'bg-pink-500', cyan:'bg-cyan-500', indigo:'bg-indigo-500', violet:'bg-violet-500' };
-const BDR  = { blue:'border-blue-500/60', purple:'border-purple-500/60', amber:'border-amber-500/60', yellow:'border-yellow-500/60', green:'border-green-500/60', emerald:'border-emerald-500/60', orange:'border-orange-500/60', pink:'border-pink-500/60', cyan:'border-cyan-500/60', indigo:'border-indigo-500/60', violet:'border-violet-500/60' };
-const SHAD = { blue:'shadow-blue-500/20', purple:'shadow-purple-500/20', amber:'shadow-amber-500/20', yellow:'shadow-yellow-500/20', green:'shadow-green-500/20', emerald:'shadow-emerald-500/20', orange:'shadow-orange-500/20', pink:'shadow-pink-500/20', cyan:'shadow-cyan-500/20', indigo:'shadow-indigo-500/20', violet:'shadow-violet-500/20' };
-const HBDR = { blue:'hover:border-blue-400', purple:'hover:border-purple-400', amber:'hover:border-amber-400', yellow:'hover:border-yellow-400', green:'hover:border-green-400', emerald:'hover:border-emerald-400', orange:'hover:border-orange-400', pink:'hover:border-pink-400', cyan:'hover:border-cyan-400', indigo:'hover:border-indigo-400', violet:'hover:border-violet-400' };
-const RING = { blue:'ring-blue-500/50', purple:'ring-purple-500/50', amber:'ring-amber-500/50', yellow:'ring-yellow-500/50', green:'ring-green-500/50', emerald:'ring-emerald-500/50', orange:'ring-orange-500/50', pink:'ring-pink-500/50', cyan:'ring-cyan-500/50', indigo:'ring-indigo-500/50', violet:'ring-violet-500/50' };
-const DOT  = { blue:'bg-blue-400', purple:'bg-purple-400', amber:'bg-amber-400', yellow:'bg-yellow-400', green:'bg-green-400', emerald:'bg-emerald-400', orange:'bg-orange-400', pink:'bg-pink-400', cyan:'bg-cyan-400', indigo:'bg-indigo-400', violet:'bg-violet-400' };
+/* ─── colour maps — 2-colour palette: cyan & purple ─── */
+const _C = (cyan, purple) => ({ cyan, purple, blue:cyan, green:cyan, emerald:cyan, indigo:purple, violet:purple, pink:purple, amber:purple, yellow:purple, orange:purple });
+const BG   = _C('bg-cyan-500',          'bg-purple-500');
+const BDR  = _C('border-cyan-500/60',   'border-purple-500/60');
+const SHAD = _C('shadow-cyan-500/20',   'shadow-purple-500/20');
+const HBDR = _C('hover:border-cyan-400','hover:border-purple-400');
+const RING = _C('ring-cyan-500/50',     'ring-purple-500/50');
+const DOT  = _C('bg-cyan-400',          'bg-purple-400');
 
 const resolveIcon = (name) => ICON_MAP[name] || Cpu;
 
@@ -37,7 +39,7 @@ const Connections = ({ nodes, connections, executionResults }) => (
       const res = executionResults[from.id];
       const isSuccess = res?.status === 'success';
       const isRunning = res?.status === 'running';
-      const color = isSuccess ? '#06b6d4' : isRunning ? '#f59e0b' : '#334155';
+      const color = isSuccess ? '#06b6d4' : isRunning ? '#a855f7' : '#334155';
 
       return (
         <g key={conn.id}>
@@ -50,7 +52,7 @@ const Connections = ({ nodes, connections, executionResults }) => (
             </>
           )}
           {isRunning && (
-            <circle r="3" fill="#f59e0b" opacity="0.8"><animateMotion dur="1s" repeatCount="indefinite" path={d}/></circle>
+            <circle r="3" fill="#a855f7" opacity="0.8"><animateMotion dur="1s" repeatCount="indefinite" path={d}/></circle>
           )}
         </g>
       );
@@ -73,12 +75,12 @@ const WorkflowNode = ({ node, isSelected, executionResult, onSelect, onDragStart
         shadow-lg transition-all duration-200
         ${BDR[node.color] || 'border-slate-600'} ${SHAD[node.color] || ''}
         ${isSelected ? `ring-2 ${RING[node.color] || 'ring-cyan-400/50'} scale-[1.04]` : 'hover:scale-[1.02]'}
-        ${isRunning ? 'animate-pulse ring-2 ring-amber-400/60' : ''}`}
+        ${isRunning ? 'animate-pulse ring-2 ring-purple-400/60' : ''}`}
       >
         {/* execution badge */}
         {executionResult && (
           <div className={`absolute -top-2.5 -right-2.5 rounded-full p-1.5 border-2 border-slate-900
-            ${executionResult.status === 'success' ? 'bg-green-500' : executionResult.status === 'running' ? 'bg-amber-500 animate-spin-slow' : 'bg-red-500'}`}>
+            ${executionResult.status === 'success' ? 'bg-cyan-500' : executionResult.status === 'running' ? 'bg-purple-500 animate-spin-slow' : 'bg-red-500'}`}>
             {executionResult.status === 'success' && <CheckCircle className="text-white w-3.5 h-3.5"/>}
             {executionResult.status === 'running' && <Loader2 className="text-white w-3.5 h-3.5 animate-spin"/>}
             {executionResult.status === 'error' && <AlertCircle className="text-white w-3.5 h-3.5"/>}
@@ -97,7 +99,7 @@ const WorkflowNode = ({ node, isSelected, executionResult, onSelect, onDragStart
         {node.outputs?.map((out, i) => (
           <div key={out}
             onMouseDown={(e) => { e.stopPropagation(); onPortDragStart(node.id); }}
-            className="absolute w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 -right-2 shadow-md shadow-emerald-500/40 hover:scale-125 transition-transform cursor-crosshair"
+            className="absolute w-4 h-4 bg-purple-500 rounded-full border-2 border-slate-900 -right-2 shadow-md shadow-purple-500/40 hover:scale-125 transition-transform cursor-crosshair"
             style={{ top: `${40 + i * 22}%` }} />
         ))}
 
@@ -337,16 +339,142 @@ const AchievementToast = ({ achievement }) => {
   if (!achievement) return null;
   return (
     <div className="fixed top-20 right-6 z-50 animate-slide-in">
-      <div className="bg-slate-900/95 border-2 border-amber-500/60 rounded-xl p-4 shadow-2xl shadow-amber-500/20 flex items-center gap-3 min-w-[280px]">
+      <div className="bg-slate-900/95 border-2 border-purple-500/60 rounded-xl p-4 shadow-2xl shadow-purple-500/20 flex items-center gap-3 min-w-[280px]">
         <div className="text-3xl">{achievement.icon}</div>
         <div>
           <div className="flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-amber-400"/>
-            <span className="text-amber-400 text-[10px] font-mono uppercase tracking-wider">Achievement Unlocked!</span>
+            <Award className="w-3.5 h-3.5 text-purple-400"/>
+            <span className="text-purple-400 text-[10px] font-mono uppercase tracking-wider">Achievement Unlocked!</span>
           </div>
           <p className="text-white font-bold text-sm">{achievement.name}</p>
           <p className="text-slate-400 text-[10px]">{achievement.description} • +{achievement.xp} XP</p>
         </div>
+      </div>
+    </div>
+  );
+};
+
+/* ══════════════════════ AI Mapping Suggestions Panel ══════════════════════ */
+const AIMappingPanel = ({ onClose }) => {
+  const [sourceFields, setSourceFields] = useState('BEG.3, N1.2, IT1.7, IT1.4, TDS.1');
+  const [docType, setDocType] = useState('850');
+  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState(null);
+  const [error, setError] = useState(null);
+
+  const getSuggestions = async () => {
+    setLoading(true);
+    setError(null);
+    setSuggestions(null);
+    try {
+      const fields = sourceFields.split(',').map(f => f.trim()).filter(Boolean);
+      const res = await api.post('/mappings/suggest', {
+        source_fields: fields,
+        document_type: docType,
+        standard: 'X12',
+      });
+      setSuggestions(res.data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Suggestion request failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confidenceColor = (c) => {
+    if (c >= 0.85) return 'text-cyan-400';
+    if (c >= 0.65) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  return (
+    <div className="absolute top-0 right-0 w-96 h-full bg-slate-900/98 backdrop-blur-sm border-l border-purple-500/30 z-40 flex flex-col shadow-2xl shadow-purple-500/10">
+      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+            <Sparkles className="w-3.5 h-3.5 text-white"/>
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-sm">AI Mapping Suggestions</h3>
+            <p className="text-slate-500 text-[10px] font-mono">text-embedding-3-small + GPT-4o</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+          <X className="w-4 h-4"/>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div>
+          <label className="text-slate-400 text-[10px] font-mono uppercase tracking-wider mb-1 block">Source EDI Fields (comma-separated)</label>
+          <textarea
+            value={sourceFields}
+            onChange={(e) => setSourceFields(e.target.value)}
+            rows={3}
+            placeholder="BEG.3, N1.2, IT1.7..."
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-purple-500/50 resize-none"
+          />
+        </div>
+
+        <div>
+          <label className="text-slate-400 text-[10px] font-mono uppercase tracking-wider mb-1 block">Transaction Set</label>
+          <select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-purple-500/50"
+          >
+            {['850','856','810','855','997'].map(t => (
+              <option key={t} value={t}>X12 {t}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={getSuggestions}
+          disabled={loading || !sourceFields.trim()}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-xs font-bold hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 transition-all shadow-lg shadow-purple-500/20"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Sparkles className="w-3.5 h-3.5"/>}
+          {loading ? 'Generating...' : 'Get AI Suggestions'}
+        </button>
+
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0"/>
+            <span className="text-red-400 text-xs">{error}</span>
+          </div>
+        )}
+
+        {suggestions && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-slate-400 text-[10px] font-mono uppercase tracking-wider">Suggestions</p>
+              <span className="text-[10px] font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                {suggestions.method || 'ai'}
+              </span>
+            </div>
+            {suggestions.suggestions?.map((s, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-lg p-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-xs font-mono font-semibold">{s.source_field}</span>
+                  <span className={`text-xs font-mono font-bold ${confidenceColor(s.confidence)}`}>
+                    {(s.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <ChevronRight className="w-3 h-3 text-purple-400 flex-shrink-0"/>
+                  <span className="text-purple-300 text-xs font-mono">{s.suggested_target}</span>
+                </div>
+                {s.alternatives?.length > 0 && (
+                  <div className="text-slate-500 text-[10px] font-mono">
+                    Alt: {s.alternatives[0].field} ({(s.alternatives[0].confidence * 100).toFixed(0)}%)
+                  </div>
+                )}
+                <div className="text-slate-600 text-[9px] font-mono truncate">{s.reason}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -366,6 +494,7 @@ const Mapper = () => {
   const canvasRef  = useRef(null);
   const dragRef    = useRef({ active: false, nodeId: null, offsetX: 0, offsetY: 0 });
   const [saveMsg, setSaveMsg] = useState(null);
+  const [showAIMapping, setShowAIMapping] = useState(false);
 
   const handleCanvasMouseDown = useCallback((e) => {
     if (e.target === canvasRef.current || e.target.tagName === 'svg') {
@@ -448,30 +577,34 @@ const Mapper = () => {
 
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-lg border border-amber-500/30">
-              <Trophy className="w-3 h-3 text-amber-400"/>
-              <span className="text-amber-400 font-mono text-[11px] font-bold">Lv {level}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-purple-500/20 to-purple-700/20 rounded-lg border border-purple-500/30">
+              <Trophy className="w-3 h-3 text-purple-400"/>
+              <span className="text-purple-400 font-mono text-[11px] font-bold">Lv {level}</span>
               <div className="w-14 h-1.5 bg-slate-700 rounded-full overflow-hidden ml-1">
-                <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${expProgress}%` }}/>
+                <div className="h-full bg-gradient-to-r from-purple-500 to-purple-700 rounded-full transition-all" style={{ width: `${expProgress}%` }}/>
               </div>
-              <span className="text-amber-300/60 text-[9px] font-mono">{experience} XP</span>
+              <span className="text-purple-300/60 text-[9px] font-mono">{experience} XP</span>
             </div>
             <div className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/80 rounded-lg border border-slate-700/50">
-              <Target className="w-3 h-3 text-green-400"/>
-              <span className="text-green-400 font-mono text-[11px] font-bold">{accuracy}%</span>
+              <Target className="w-3 h-3 text-cyan-400"/>
+              <span className="text-cyan-400 font-mono text-[11px] font-bold">{accuracy}%</span>
             </div>
             <div className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/80 rounded-lg border border-slate-700/50">
               <Activity className="w-3 h-3 text-purple-400"/>
               <span className="text-purple-400 font-mono text-[11px] font-bold">{streak} streak</span>
             </div>
             {Object.keys(achievements).length > 0 && (
-              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/80 rounded-lg border border-amber-500/30">
-                <Award className="w-3 h-3 text-amber-400"/>
-                <span className="text-amber-400 font-mono text-[11px] font-bold">{Object.keys(achievements).length}</span>
+              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/80 rounded-lg border border-purple-500/30">
+                <Award className="w-3 h-3 text-purple-400"/>
+                <span className="text-purple-400 font-mono text-[11px] font-bold">{Object.keys(achievements).length}</span>
               </div>
             )}
-          </div>
+        </div>
 
+          <button onClick={() => setShowAIMapping(v => !v)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${showAIMapping ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-purple-500/40 hover:text-white'}`}>
+            <Sparkles className="w-3.5 h-3.5"/> AI Suggest
+          </button>
           <button onClick={executeWorkflow} disabled={isExecuting || nodes.length === 0}
             className="flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg text-xs font-bold hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-500/20">
             {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Play className="w-3.5 h-3.5"/>}
@@ -491,8 +624,8 @@ const Mapper = () => {
           onMouseDown={handleCanvasMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
 
           {connectingFrom && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-amber-500/20 border border-amber-500/40 rounded-lg px-3 py-1">
-              <p className="text-amber-400 text-[10px] font-mono">Click an input port (blue dot) on another node to connect</p>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-purple-500/20 border border-purple-500/40 rounded-lg px-3 py-1">
+              <p className="text-purple-400 text-[10px] font-mono">Click an input port (cyan dot) on another node to connect</p>
             </div>
           )}
 
@@ -508,7 +641,7 @@ const Mapper = () => {
                 onPortDragStart={handlePortDragStart}
                 onPortDrop={handlePortDrop}/>
             ))}
-          </div>
+                </div>
 
           <MiniMap nodes={nodes}/>
 
@@ -517,7 +650,7 @@ const Mapper = () => {
             <button onClick={() => setZoom(zoom - 0.1)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"><Minimize2 className="w-3.5 h-3.5"/></button>
             <span className="text-white text-[10px] font-mono w-10 text-center">{Math.round(zoom * 100)}%</span>
             <button onClick={() => setZoom(zoom + 0.1)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"><Maximize2 className="w-3.5 h-3.5"/></button>
-          </div>
+                </div>
 
           {/* Empty state */}
           {nodes.length === 0 && (
@@ -533,12 +666,13 @@ const Mapper = () => {
                   Load Sample Workflow
                 </button>
               </div>
-            </div>
-          )}
-        </div>
+                  </div>
+                )}
+                </div>
 
-        {selectedNode && <NodeConfig node={selectedNode} onDelete={deleteNode} onUpdateLabel={updateNodeLabel} onUpdateConfigValue={updateNodeConfigValue}/>}
-      </div>
+        {selectedNode && !showAIMapping && <NodeConfig node={selectedNode} onDelete={deleteNode} onUpdateLabel={updateNodeLabel} onUpdateConfigValue={updateNodeConfigValue}/>}
+        {showAIMapping && <AIMappingPanel onClose={() => setShowAIMapping(false)}/>}
+          </div>
     </div>
   );
 };

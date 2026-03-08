@@ -17,8 +17,14 @@ export const analyticsService = {
   getPartnerPerformance: async (partnerId = null, days = 30) => {
     const params = new URLSearchParams({ days: days.toString() });
     if (partnerId) params.append('partner_id', partnerId);
-    
+
     const response = await api.get(`/analytics/partner-performance/?${params}`);
+    return response.data;
+  },
+
+  // Get SLA compliance and breaches
+  getSla: async (days = 7) => {
+    const response = await api.get(`/analytics/sla/?days=${days}`);
     return response.data;
   },
 };

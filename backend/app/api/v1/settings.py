@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.services.slack_service import slack_service
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(prefix="/settings", tags=["settings"], dependencies=[Depends(require_auth_if_enabled)])
 
 SETTINGS_DOC_ID = "platform"
 
@@ -18,6 +19,7 @@ class SettingsUpdate(BaseModel):
     slack_webhook_url: Optional[str] = Field(None, description="Slack Incoming Webhook URL")
     exception_alerts: Optional[bool] = Field(None, description="Send Slack alerts for exceptions")
     document_alerts: Optional[bool] = Field(None, description="Send Slack alerts for document status changes")
+    our_company_isa_id: Optional[str] = Field(None, description="Our company ISA ID for auto-detecting Inbound/Outbound")
 
 
 class SettingsResponse(BaseModel):
@@ -26,6 +28,7 @@ class SettingsResponse(BaseModel):
     slack_webhook_masked: Optional[str] = None
     exception_alerts: bool = True
     document_alerts: bool = True
+    our_company_isa_id: Optional[str] = None
 
 
 @router.get("", response_model=SettingsResponse)
@@ -36,18 +39,22 @@ async def get_settings(db=Depends(get_database)):
         slack_service.set_webhook(doc["slack_webhook_url"])
     if not doc:
         # Check env fallback
+        from app.core.config import settings
         configured = slack_service.is_configured()
         return SettingsResponse(
             slack_webhook_configured=configured,
             slack_webhook_masked=slack_service.get_webhook() if configured else None,
             exception_alerts=True,
             document_alerts=True,
+            our_company_isa_id=settings.OUR_COMPANY_ISA_ID,
         )
+    from app.core.config import settings
     return SettingsResponse(
         slack_webhook_configured=bool(doc.get("slack_webhook_url")),
         slack_webhook_masked=slack_service.get_webhook() if doc.get("slack_webhook_url") else None,
         exception_alerts=doc.get("exception_alerts", True),
         document_alerts=doc.get("document_alerts", True),
+        our_company_isa_id=doc.get("our_company_isa_id") or settings.OUR_COMPANY_ISA_ID,
     )
 
 
@@ -71,6 +78,8 @@ async def update_settings(update: SettingsUpdate, db=Depends(get_database)):
         current["exception_alerts"] = update.exception_alerts
     if update.document_alerts is not None:
         current["document_alerts"] = update.document_alerts
+    if update.our_company_isa_id is not None:
+        current["our_company_isa_id"] = (update.our_company_isa_id or "").strip() or None
 
     current["_id"] = SETTINGS_DOC_ID
     await db.platform_settings.update_one(
@@ -79,9 +88,11 @@ async def update_settings(update: SettingsUpdate, db=Depends(get_database)):
         upsert=True,
     )
 
+    from app.core.config import settings
     return SettingsResponse(
         slack_webhook_configured=bool(current.get("slack_webhook_url")),
         slack_webhook_masked=slack_service.get_webhook() if current.get("slack_webhook_url") else None,
         exception_alerts=current.get("exception_alerts", True),
         document_alerts=current.get("document_alerts", True),
+        our_company_isa_id=current.get("our_company_isa_id") or settings.OUR_COMPANY_ISA_ID,
     )

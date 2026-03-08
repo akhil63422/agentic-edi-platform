@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { documentsService } from '@/services/documents';
+import { Loader2 } from 'lucide-react';
 import { 
   ArrowUpFromLine, 
   Search, 
@@ -32,6 +34,14 @@ import {
 export const OutboundEDI = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState([]);
+  const [kpiData, setKpiData] = useState([
+    { title: 'Total Outbound Files', value: '0', subtitle: '—', trend: 'up', trendValue: '—', icon: FileText },
+    { title: 'Successfully Sent', value: '0', subtitle: '—', trend: 'up', trendValue: '—', variant: 'success', icon: Send },
+    { title: 'Pending Delivery', value: '0', subtitle: '—', trend: 'down', trendValue: '—', variant: 'warning', icon: Clock },
+    { title: 'Failed', value: '0', subtitle: '—', trend: 'down', trendValue: '—', variant: 'error', icon: XCircle },
+  ]);
   const [filters, setFilters] = useState({
     dateRange: 'last7days',
     partner: 'all',
@@ -40,147 +50,58 @@ export const OutboundEDI = () => {
     search: '',
   });
 
-  // Mock KPI data for Outbound
-  const kpiData = [
-    {
-      title: 'Total Outbound Files',
-      value: '892',
-      subtitle: 'Last 7 days',
-      trend: 'up',
-      trendValue: '+8%',
-      icon: FileText,
-    },
-    {
-      title: 'Successfully Sent',
-      value: '856',
-      subtitle: '96.0% success rate',
-      trend: 'up',
-      trendValue: '+1.5%',
-      variant: 'success',
-      icon: Send,
-    },
-    {
-      title: 'Pending Delivery',
-      value: '28',
-      subtitle: 'Awaiting acknowledgment',
-      trend: 'down',
-      trendValue: '-3',
-      variant: 'warning',
-      icon: Clock,
-    },
-    {
-      title: 'Failed',
-      value: '8',
-      subtitle: 'Requires action',
-      trend: 'down',
-      trendValue: '-2',
-      variant: 'error',
-      icon: XCircle,
-    },
-  ];
+  const loadDocuments = async () => {
+    try {
+      setLoading(true);
+      const params = { direction: 'Outbound', skip: 0, limit: 1000, forceApi: true };
+      if (filters.status !== 'all') params.status = filters.status;
+      if (filters.docType !== 'all') params.document_type = filters.docType;
+      if (filters.partner !== 'all') params.partner_id = filters.partner;
+      const data = await documentsService.getAll(params);
+      const list = Array.isArray(data) ? data : (data?.items ?? []);
+      const transformed = list.map(doc => ({
+        id: doc._id || doc.id,
+        fileId: doc.file_name || doc._id || doc.id,
+        partner: doc.partner_code || 'Unknown',
+        docType: doc.document_type,
+        direction: doc.direction || 'Outbound',
+        status: doc.status,
+        currentStage: doc.status,
+        linkedTransactionId: doc.parent_transaction_id || null,
+        sentAt: doc.received_at ? new Date(doc.received_at).toLocaleTimeString() : 'Unknown',
+        timestamp: doc.received_at || doc.created_at,
+      }));
+      setTransactions(transformed);
+      const completed = transformed.filter(d => d.status === 'Completed').length;
+      const failed = transformed.filter(d => d.status === 'Failed').length;
+      const pending = transformed.filter(d => ['Processing', 'Needs Review'].includes(d.status)).length;
+      const successRate = transformed.length > 0 ? ((completed / transformed.length) * 100).toFixed(1) : 0;
+      setKpiData([
+        { title: 'Total Outbound Files', value: transformed.length.toString(), subtitle: '—', trend: 'up', trendValue: '—', icon: FileText },
+        { title: 'Successfully Sent', value: completed.toString(), subtitle: `${successRate}% success rate`, trend: 'up', trendValue: '—', variant: 'success', icon: Send },
+        { title: 'Pending Delivery', value: pending.toString(), subtitle: '—', trend: 'down', trendValue: '—', variant: 'warning', icon: Clock },
+        { title: 'Failed', value: failed.toString(), subtitle: '—', trend: 'down', trendValue: '—', variant: 'error', icon: XCircle },
+      ]);
+    } catch {
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Mock transaction data for Outbound
-  const transactions = [
-    {
-      id: 'INV_4521',
-      fileId: 'INV_4521',
-      partner: 'Walmart',
-      docType: 'X12 810',
-      direction: 'Outbound',
-      status: 'Completed',
-      currentStage: 'ACK Received',
-      sentAt: '10:35 AM',
-      timestamp: '2024-01-15 10:35',
-    },
-    {
-      id: 'INV_4520',
-      fileId: 'INV_4520',
-      partner: 'Target',
-      docType: 'X12 810',
-      direction: 'Outbound',
-      status: 'Pending ACK',
-      currentStage: 'Sent to Partner',
-      sentAt: '10:15 AM',
-      timestamp: '2024-01-15 10:15',
-    },
-    {
-      id: 'ASN_7835',
-      fileId: 'ASN_7835',
-      partner: 'Amazon',
-      docType: 'X12 856',
-      direction: 'Outbound',
-      status: 'Failed',
-      currentStage: 'Transmission Failed',
-      sentAt: '09:45 AM',
-      timestamp: '2024-01-15 09:45',
-    },
-    {
-      id: 'PO_ACK_8932',
-      fileId: 'PO_ACK_8932',
-      partner: 'Home Depot',
-      docType: 'X12 855',
-      direction: 'Outbound',
-      status: 'Completed',
-      currentStage: 'ACK Received',
-      sentAt: '09:20 AM',
-      timestamp: '2024-01-15 09:20',
-    },
-    {
-      id: 'INV_4519',
-      fileId: 'INV_4519',
-      partner: 'Costco',
-      docType: 'X12 810',
-      direction: 'Outbound',
-      status: 'Processing',
-      currentStage: 'Building EDI',
-      sentAt: '08:55 AM',
-      timestamp: '2024-01-15 08:55',
-    },
-    {
-      id: 'ASN_7834',
-      fileId: 'ASN_7834',
-      partner: 'Kroger',
-      docType: 'X12 856',
-      direction: 'Outbound',
-      status: 'Completed',
-      currentStage: 'ACK Received',
-      sentAt: '08:30 AM',
-      timestamp: '2024-01-15 08:30',
-    },
-    {
-      id: 'INV_4518',
-      fileId: 'INV_4518',
-      partner: 'Walmart',
-      docType: 'X12 810',
-      direction: 'Outbound',
-      status: 'Needs Review',
-      currentStage: 'Validation',
-      sentAt: '08:10 AM',
-      timestamp: '2024-01-15 08:10',
-    },
-    {
-      id: 'PO_ACK_8931',
-      fileId: 'PO_ACK_8931',
-      partner: 'Target',
-      docType: 'X12 855',
-      direction: 'Outbound',
-      status: 'Completed',
-      currentStage: 'ACK Received',
-      sentAt: '7:45 AM',
-      timestamp: '2024-01-15 07:45',
-    },
-  ];
+  useEffect(() => { loadDocuments(); }, [filters]);
 
   const itemsPerPage = 50;
-  const totalItems = 892;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
       'Completed': { variant: 'success', icon: CheckCircle2, bg: 'bg-success-bg', text: 'text-success-foreground' },
+      'Delivered': { variant: 'success', icon: CheckCircle2, bg: 'bg-success-bg', text: 'text-success-foreground' },
       'Needs Review': { variant: 'warning', icon: AlertTriangle, bg: 'bg-warning-bg', text: 'text-warning-foreground' },
       'Failed': { variant: 'error', icon: XCircle, bg: 'bg-error-bg', text: 'text-error-foreground' },
       'Processing': { variant: 'processing', icon: Clock, bg: 'bg-processing', text: 'text-processing-foreground' },
+      'Routing': { variant: 'processing', icon: Clock, bg: 'bg-processing', text: 'text-processing-foreground' },
+      'Delivering': { variant: 'processing', icon: Clock, bg: 'bg-processing', text: 'text-processing-foreground' },
       'Pending ACK': { variant: 'warning', icon: Clock, bg: 'bg-warning-bg', text: 'text-warning-foreground' },
       'ACK Received': { variant: 'success', icon: CheckCircle2, bg: 'bg-success-bg', text: 'text-success-foreground' },
     };
@@ -221,9 +142,22 @@ export const OutboundEDI = () => {
     return true;
   });
 
+  const totalItems = filteredTransactions.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+          <p className="text-cyan-300 font-mono">Loading outbound documents...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -304,6 +238,7 @@ export const OutboundEDI = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="Delivered">Delivered</SelectItem>
                   <SelectItem value="Completed">Completed</SelectItem>
                   <SelectItem value="Pending ACK">Pending ACK</SelectItem>
                   <SelectItem value="Needs Review">Needs Review</SelectItem>
@@ -342,6 +277,7 @@ export const OutboundEDI = () => {
                   <TableHead className="font-semibold">Direction</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">Current Stage</TableHead>
+                  <TableHead className="font-semibold">Linked Transaction</TableHead>
                   <TableHead className="font-semibold">Sent At</TableHead>
                   <TableHead className="font-semibold text-right">Actions</TableHead>
                 </TableRow>
@@ -386,6 +322,20 @@ export const OutboundEDI = () => {
                       </TableCell>
                       <TableCell>{getStatusBadge(tx.status)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.currentStage}</TableCell>
+                      <TableCell>
+                        {tx.linkedTransactionId ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 font-mono text-xs"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/document/${tx.linkedTransactionId}`); }}
+                          >
+                            {tx.linkedTransactionId.slice(-12)}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.sentAt}</TableCell>
                       <TableCell 
                         className="text-right"
@@ -405,7 +355,7 @@ export const OutboundEDI = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No transactions found matching your filters
                     </TableCell>
                   </TableRow>

@@ -7,13 +7,14 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.api.v1.dependencies import require_operator
 from pydantic import BaseModel
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/exception-rules", tags=["exception-rules"])
+router = APIRouter(prefix="/exception-rules", tags=["exception-rules"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 class ExceptionRule(BaseModel):

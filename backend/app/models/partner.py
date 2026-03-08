@@ -60,6 +60,10 @@ class EDIConfig(BaseModel):
 
 class ERPContext(BaseModel):
     backend_system: Optional[str] = None  # SAP, Oracle, NetSuite, etc.
+    type: Optional[str] = None  # SAP, Oracle, REST, API - for posting (maps to erp_service)
+    endpoint: Optional[str] = None  # API URL for posting
+    credentials: Optional[Dict[str, Any]] = None  # Encrypted credentials (when ENCRYPTION_KEY set)
+    api_key: Optional[str] = None  # API key / client_id for posting (stored, masked in UI)
     version: Optional[str] = None
     customizations: Optional[List[str]] = None
     notes: Optional[str] = None

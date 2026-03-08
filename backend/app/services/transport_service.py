@@ -40,10 +40,10 @@ class TransportService:
         host: str,
         port: int,
         username: str,
+        remote_path: str,
+        local_path: str,
         password: Optional[str] = None,
         private_key: Optional[str] = None,
-        remote_path: str,
-        local_path: str
     ) -> Dict[str, Any]:
         """Receive file via SFTP"""
         try:
@@ -106,10 +106,10 @@ class TransportService:
         host: str,
         port: int,
         username: str,
+        local_path: str,
+        remote_path: str,
         password: Optional[str] = None,
         private_key: Optional[str] = None,
-        local_path: str,
-        remote_path: str
     ) -> Dict[str, Any]:
         """Send file via SFTP"""
         try:
@@ -160,8 +160,8 @@ class TransportService:
     async def receive_file_api(
         self,
         url: str,
+        local_path: str,
         headers: Optional[Dict[str, str]] = None,
-        local_path: str
     ) -> Dict[str, Any]:
         """Receive file via API"""
         try:
@@ -206,53 +206,37 @@ class TransportService:
             logger.error(f"Error sending file via API: {e}")
             return {"success": False, "error": str(e)}
     
-    async def poll_for_files(
-        self,
-        transport_config: Dict[str, Any],
-        callback: callable
-    ) -> List[Dict[str, Any]]:
-        """Poll for new files based on transport configuration"""
+    def list_files(self, transport_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """List files from SFTP or S3 (sync, for use in thread)."""
         transport_type = transport_config.get("type")
         files_found = []
-        
         try:
             if transport_type == "SFTP":
-                # Poll SFTP directory
                 host = transport_config.get("endpoint", {}).get("host")
                 port = transport_config.get("endpoint", {}).get("port", 22)
                 username = transport_config.get("credentials", {}).get("username")
                 password = transport_config.get("credentials", {}).get("password")
                 remote_path = transport_config.get("remote_path", "/")
-                
+
                 import paramiko
                 transport = paramiko.Transport((host, port))
                 transport.connect(username=username, password=password)
                 sftp = paramiko.SFTPClient.from_transport(transport)
-                
-                # List files in directory
                 files = sftp.listdir(remote_path)
                 for file in files:
                     if file.endswith(('.edi', '.x12', '.txt')):
                         files_found.append({
                             "name": file,
-                            "path": f"{remote_path}/{file}",
+                            "path": f"{remote_path.rstrip('/')}/{file}",
                             "transport_type": "SFTP"
                         })
-                
                 sftp.close()
                 transport.close()
-            
             elif transport_type == "S3":
-                # Poll S3 bucket
                 bucket = transport_config.get("bucket")
                 prefix = transport_config.get("prefix", "")
-                
                 if self.s3_client:
-                    response = self.s3_client.list_objects_v2(
-                        Bucket=bucket,
-                        Prefix=prefix
-                    )
-                    
+                    response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
                     for obj in response.get("Contents", []):
                         if obj["Key"].endswith(('.edi', '.x12', '.txt')):
                             files_found.append({
@@ -261,16 +245,20 @@ class TransportService:
                                 "transport_type": "S3",
                                 "size": obj["Size"]
                             })
-            
-            # Process each file found
-            for file_info in files_found:
-                await callback(file_info)
-            
-            return files_found
-        
         except Exception as e:
-            logger.error(f"Error polling for files: {e}")
-            return []
+            logger.error(f"Error listing files: {e}")
+        return files_found
+
+    async def poll_for_files(
+        self,
+        transport_config: Dict[str, Any],
+        callback: callable
+    ) -> List[Dict[str, Any]]:
+        """Poll for new files based on transport configuration"""
+        files_found = self.list_files(transport_config)
+        for file_info in files_found:
+            await callback(file_info)
+        return files_found
 
 
 # Global transport service instance

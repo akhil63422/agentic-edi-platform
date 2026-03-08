@@ -2,13 +2,13 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
-from app.api.v1 import partners, documents, exceptions, audit, auth, mappings, process, websocket, analytics, exception_rules, partner_ai, playground, data, settings as settings_router
+from app.api.v1 import partners, documents, exceptions, audit, auth, mappings, process, websocket, analytics, exception_rules, partner_ai, playground, data, settings as settings_router, workflow, search, ai as ai_router
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
+    # Secrets validation (production)
+    if settings.PRODUCTION:
+        if settings.SECRET_KEY == "your-secret-key-change-in-production":
+            raise ValueError("SECRET_KEY must be set in production. Set PRODUCTION=false for development.")
+        if not settings.ENCRYPTION_KEY or len(settings.ENCRYPTION_KEY) < 32:
+            raise ValueError("ENCRYPTION_KEY must be set (32+ chars) in production for credential encryption.")
+        logger.info("Production mode: secrets validated")
+    elif settings.SECRET_KEY == "your-secret-key-change-in-production":
+        logger.warning("SECRET_KEY is default. Set SECRET_KEY in .env for production.")
     # Startup
     await connect_to_mongo()
     # Load settings from DB
@@ -41,8 +50,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.debug(f"Could not load settings: {e}")
     logger.info("Application started")
+    # Start background scheduler for ingestion polling
+    try:
+        from app.scheduler import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        logger.debug(f"Scheduler not started: {e}")
     yield
     # Shutdown
+    try:
+        from app.scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     await close_mongo_connection()
     logger.info("Application stopped")
 
@@ -50,9 +70,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Agentic EDI Platform API",
+    description="Agent Eddy API",
     lifespan=lifespan
 )
+
+# Correlation ID middleware (for tracing)
+from app.middleware.correlation_id import CorrelationIdMiddleware
+app.add_middleware(CorrelationIdMiddleware)
+
+# Rate limit middleware
+from app.middleware.rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 
 # CORS middleware - allow explicit origins + regex for Netlify/Render/Cloudflare tunnels
 _cors_origins = [x.strip() for x in settings.CORS_ORIGINS.split(",") if x.strip()]
@@ -80,6 +108,9 @@ app.include_router(partner_ai.router, prefix=settings.API_V1_STR)
 app.include_router(playground.router, prefix=settings.API_V1_STR)
 app.include_router(data.router, prefix=settings.API_V1_STR)
 app.include_router(settings_router.router, prefix=settings.API_V1_STR)
+app.include_router(workflow.router, prefix=settings.API_V1_STR)
+app.include_router(search.router, prefix=settings.API_V1_STR)
+app.include_router(ai_router.router, prefix=settings.API_V1_STR)
 
 # Frontend static files (when SERVE_FRONTEND=true, e.g. vast.ai single-port)
 FRONTEND_BUILD = Path(__file__).resolve().parent.parent.parent / "frontend" / "build"
@@ -91,10 +122,22 @@ async def root():
     if settings.SERVE_FRONTEND and (FRONTEND_BUILD / "index.html").exists():
         return FileResponse(FRONTEND_BUILD / "index.html")
     return {
-        "message": "Agentic EDI Platform API",
+        "message": "Agent Eddy API",
         "version": settings.APP_VERSION,
         "docs": "/docs"
     }
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    try:
+        from app.metrics import get_metrics
+        body, content_type = get_metrics()
+        return Response(content=body, media_type=content_type)
+    except Exception as e:
+        logger.debug(f"Metrics error: {e}")
+        return Response(content=b"# Metrics unavailable\n", media_type="text/plain")
 
 
 @app.get("/health")
@@ -118,7 +161,7 @@ async def health_check(db_check: bool = False):
 async def api_v1_root():
     """API v1 root - lists available endpoints"""
     return {
-        "message": "Agentic EDI Platform API",
+        "message": "Agent Eddy API",
         "version": settings.APP_VERSION,
         "docs": "/docs",
         "endpoints": {

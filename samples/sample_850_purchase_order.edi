@@ -1,0 +1,31 @@
+ISA*00*          *00*          *ZZ*WALMART        *ZZ*ACME_CORP      *260305*0900*^*00501*000000001*0*P*:~
+GS*PO*WALMART*ACME_CORP*20260305*090000*1*X*005010~
+ST*850*0001~
+BEG*00*SA*PO-2026-00847**20260305~
+CUR*BY*USD~
+REF*DP*DEPT-042~
+REF*IA*BUYER-ACCT-9921~
+DTM*002*20260310~
+DTM*004*20260320~
+N1*BY*Walmart Inc.*ZZ*WMT001~
+N2*Global Procurement Division~
+N3*702 SW 8th Street~
+N4*Bentonville*AR*72716*US~
+N1*ST*Walmart Distribution Center 6094*ZZ*WDC6094~
+N3*1500 Distribution Drive~
+N4*Shelby*NC*28152*US~
+N1*SE*Acme Corporation*ZZ*ACME001~
+N3*100 Acme Way~
+N4*Phoenix*AZ*85001*US~
+PO1*1*500*EA*12.50*PE*IN*SKU-AX-1001*VN*ACME-WIDGET-A*PD*Premium Widget Type A~
+PID*F****Premium Widget Type A - Stainless Steel Finish~
+MEA*WT*G*2.5*LB~
+PO1*2*250*EA*24.00*PE*IN*SKU-AX-1002*VN*ACME-WIDGET-B*PD*Premium Widget Type B~
+PID*F****Premium Widget Type B - Matte Black Finish~
+MEA*WT*G*3.2*LB~
+PO1*3*100*EA*48.75*PE*IN*SKU-AX-1003*VN*ACME-WIDGET-C*PD*Premium Widget Type C~
+CTT*3*850~
+AMT*TT*17125.00~
+SE*29*0001~
+GE*1*1~
+IEA*1*000000001~

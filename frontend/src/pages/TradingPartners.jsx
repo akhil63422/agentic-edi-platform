@@ -175,65 +175,6 @@ export const TradingPartners = () => {
     }
   };
 
-  // Mock data fallback for development
-  const mockPartners = [
-    {
-      id: '1',
-      name: 'Walmart Inc.',
-      code: 'WMT',
-      role: 'Customer',
-      status: 'Active',
-      ediStandard: 'X12 5010',
-      documents: ['850', '810', '856'],
-      lastActivity: '2 hours ago',
-      exceptionCount: 0,
-    },
-    {
-      id: '2',
-      name: 'Target Corporation',
-      code: 'TGT',
-      role: 'Customer',
-      status: 'Active',
-      ediStandard: 'X12 5010',
-      documents: ['850', '856'],
-      lastActivity: '5 hours ago',
-      exceptionCount: 2,
-    },
-    {
-      id: '3',
-      name: 'Amazon.com',
-      code: 'AMZN',
-      role: 'Both',
-      status: 'Active',
-      ediStandard: 'X12 5010',
-      documents: ['850', '810', '856', '997'],
-      lastActivity: '1 day ago',
-      exceptionCount: 0,
-    },
-    {
-      id: '4',
-      name: 'Home Depot',
-      code: 'HD',
-      role: 'Supplier',
-      status: 'Testing',
-      ediStandard: 'X12 4010',
-      documents: ['850'],
-      lastActivity: '3 days ago',
-      exceptionCount: 5,
-    },
-    {
-      id: '5',
-      name: 'Costco Wholesale',
-      code: 'COST',
-      role: 'Customer',
-      status: 'Draft',
-      ediStandard: 'EDIFACT',
-      documents: [],
-      lastActivity: '1 week ago',
-      exceptionCount: 0,
-    },
-  ];
-
   const getStatusBadge = (status) => {
     const variants = {
       Active: { variant: 'success', icon: CheckCircle2 },

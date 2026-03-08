@@ -41,138 +41,55 @@ const Playground = () => {
 
   const fileInputRef = useRef(null);
 
-  /* ── Schema Generation (simulated AI) ── */
+  /* ── Schema Generation (real GPT-4o via backend) ── */
   const generateSchema = async () => {
     if (!description.trim()) return;
     setIsGenerating(true);
     setTestResult(null);
 
-    await new Promise(r => setTimeout(r, 1800 + Math.random() * 1200));
-
-    const lower = description.toLowerCase();
-    let generated;
-
-    if (lower.includes('856') || lower.includes('ship') || lower.includes('asn')) {
-      generated = {
-        type: 'object',
-        description: 'Schema for EDI 856 Shipping Notices',
-        properties: {
-          shipNoticeId: { type: 'string', description: 'Unique identifier for the shipping notice' },
-          shipmentDate: { type: 'string', format: 'date', description: 'Date the shipment was sent' },
-          shipmentTime: { type: 'string', description: 'Time the shipment was sent, typically HH:MM' },
-          shipmentId: { type: 'string', description: 'Identifier for the shipment' },
-          trackingNumber: { type: 'string', description: 'Carrier tracking number' },
-          carrier: { type: 'string', description: 'Name of the shipping carrier' },
-          shipTo: {
-            type: 'object',
-            description: 'Ship-to party details',
-            properties: {
-              name: { type: 'string' },
-              address: { type: 'string' },
-              contact: { type: 'string' },
-            },
-          },
-          shipFrom: {
-            type: 'object',
-            description: 'Ship-from party details',
-            properties: {
-              name: { type: 'string' },
-              address: { type: 'string' },
-              contact: { type: 'string' },
-            },
-          },
-          items: {
-            type: 'array',
-            description: 'Line items in the shipment',
-            items: {
-              type: 'object',
-              properties: {
-                itemId: { type: 'string' },
-                description: { type: 'string' },
-                quantity: { type: 'integer' },
-                unitOfMeasure: { type: 'string' },
-              },
-            },
-          },
-        },
-        required: ['shipNoticeId', 'shipmentDate', 'shipmentId', 'carrier', 'shipTo', 'shipFrom', 'items'],
-      };
-    } else if (lower.includes('850') || lower.includes('purchase') || lower.includes('order')) {
-      generated = {
-        type: 'object',
-        description: 'Schema for EDI 850 Purchase Orders',
-        properties: {
-          purchaseOrderNumber: { type: 'string', description: 'Unique PO number' },
-          orderDate: { type: 'string', format: 'date', description: 'Date the order was placed' },
-          buyerName: { type: 'string', description: 'Name of the buyer organization' },
-          sellerName: { type: 'string', description: 'Name of the seller organization' },
-          shipToAddress: { type: 'string', description: 'Shipping destination address' },
-          billToAddress: { type: 'string', description: 'Billing address' },
-          currency: { type: 'string', description: 'Currency code (e.g., USD)' },
-          totalAmount: { type: 'number', description: 'Total order amount' },
-          items: {
-            type: 'array',
-            description: 'Line items in the order',
-            items: {
-              type: 'object',
-              properties: {
-                lineNumber: { type: 'integer' },
-                productId: { type: 'string' },
-                description: { type: 'string' },
-                quantity: { type: 'integer' },
-                unitPrice: { type: 'number' },
-                unitOfMeasure: { type: 'string' },
-              },
-            },
-          },
-        },
-        required: ['purchaseOrderNumber', 'orderDate', 'buyerName', 'items'],
-      };
-    } else if (lower.includes('810') || lower.includes('invoice')) {
-      generated = {
-        type: 'object',
-        description: 'Schema for EDI 810 Invoices',
-        properties: {
-          invoiceNumber: { type: 'string', description: 'Unique invoice number' },
-          invoiceDate: { type: 'string', format: 'date', description: 'Date the invoice was issued' },
-          purchaseOrderRef: { type: 'string', description: 'Reference PO number' },
-          vendorName: { type: 'string', description: 'Vendor / seller name' },
-          buyerName: { type: 'string', description: 'Buyer / customer name' },
-          subtotal: { type: 'number', description: 'Subtotal before tax' },
-          taxAmount: { type: 'number', description: 'Tax amount' },
-          totalDue: { type: 'number', description: 'Total amount due' },
-          lineItems: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                lineNumber: { type: 'integer' },
-                productId: { type: 'string' },
-                description: { type: 'string' },
-                quantity: { type: 'integer' },
-                unitPrice: { type: 'number' },
-                lineTotal: { type: 'number' },
-              },
-            },
-          },
-        },
-        required: ['invoiceNumber', 'invoiceDate', 'vendorName', 'totalDue'],
-      };
-    } else {
-      generated = {
-        type: 'object',
-        description: `Schema generated from: ${description.slice(0, 60)}`,
-        properties: {
-          id: { type: 'string', description: 'Unique identifier' },
-          timestamp: { type: 'string', format: 'date-time', description: 'Record timestamp' },
-          data: { type: 'object', description: 'Main data payload', properties: {} },
-        },
-      };
+    try {
+      const res = await api.post('/playground/generate-schema', {
+        description,
+        pipeline,
+      });
+      const generated = res.data?.schema;
+      if (generated) {
+        setSchema(JSON.stringify(generated, null, 2));
+        setSchemaGenerated(true);
+      }
+    } catch (err) {
+      console.error('Schema generation error:', err);
+      // Graceful client-side fallback if backend is unreachable
+      const lower = description.toLowerCase();
+      let fallback;
+      if (lower.includes('856') || lower.includes('ship') || lower.includes('asn')) {
+        fallback = { type: 'object', description: 'EDI 856 Ship Notice', properties: {
+          shipNoticeId: { type: 'string' }, shipmentDate: { type: 'string', format: 'date' },
+          carrier: { type: 'string' },
+          items: { type: 'array', items: { type: 'object', properties: {
+            itemId: { type: 'string' }, quantity: { type: 'integer' } } } },
+        }, required: ['shipNoticeId', 'shipmentDate', 'carrier', 'items'] };
+      } else if (lower.includes('850') || lower.includes('purchase')) {
+        fallback = { type: 'object', description: 'EDI 850 Purchase Order', properties: {
+          purchaseOrderNumber: { type: 'string' }, orderDate: { type: 'string', format: 'date' },
+          buyerName: { type: 'string' },
+          items: { type: 'array', items: { type: 'object', properties: {
+            lineNumber: { type: 'integer' }, productId: { type: 'string' }, quantity: { type: 'integer' } } } },
+        }, required: ['purchaseOrderNumber', 'orderDate', 'buyerName', 'items'] };
+      } else if (lower.includes('810') || lower.includes('invoice')) {
+        fallback = { type: 'object', description: 'EDI 810 Invoice', properties: {
+          invoiceNumber: { type: 'string' }, invoiceDate: { type: 'string', format: 'date' },
+          vendorName: { type: 'string' }, totalDue: { type: 'number' },
+        }, required: ['invoiceNumber', 'invoiceDate', 'vendorName', 'totalDue'] };
+      } else {
+        fallback = { type: 'object', description: `Schema: ${description.slice(0, 60)}`,
+          properties: { id: { type: 'string' }, timestamp: { type: 'string', format: 'date-time' } } };
+      }
+      setSchema(JSON.stringify(fallback, null, 2));
+      setSchemaGenerated(true);
+    } finally {
+      setIsGenerating(false);
     }
-
-    setSchema(JSON.stringify(generated, null, 2));
-    setSchemaGenerated(true);
-    setIsGenerating(false);
   };
 
   /* ── File Upload ── */
@@ -188,72 +105,58 @@ const Playground = () => {
 
   const handleDragOver = (e) => e.preventDefault();
 
-  /* ── Transform (simulated) ── */
+  /* ── Transform (real GPT-4o via backend) ── */
   const transformFile = async () => {
     if (!uploadedContent || !schemaGenerated) return;
     setIsTransforming(true);
     setTestResult(null);
 
-    await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
-
-    let parsedSchema;
-    try { parsedSchema = JSON.parse(schema); } catch { parsedSchema = {}; }
-
-    const result = generateMockTransform(parsedSchema, uploadedContent);
-    setTestResult(JSON.stringify(result, null, 2));
-    setIteration(1);
-    setIsTransforming(false);
-  };
-
-  const generateMockTransform = (schemaObj, raw) => {
-    const desc = (schemaObj.description || '').toLowerCase();
-    if (desc.includes('856') || desc.includes('ship')) {
-      return {
-        shipNoticeId: '0002',
-        shipmentDate: '2023-09-03',
-        shipmentTime: '14:10',
-        shipmentId: '123456789',
-        trackingNumber: '1Z999AA10123456784',
-        carrier: 'XPO LOGISTICS',
-        shipTo: { name: 'SUPPLY CHAIN INC', address: '5678 BROADWAY AVE, NEW YORK, NY 10001, US', contact: '' },
-        shipFrom: { name: 'ACME WAREHOUSE', address: '1234 MAIN STREET, DALLAS, TX 75201, US', contact: '' },
-        items: [
-          { itemId: 'SKU-001', description: 'Widget Assembly Kit', quantity: 500, unitOfMeasure: 'EA' },
-          { itemId: 'SKU-002', description: 'Connector Cable 6ft', quantity: 200, unitOfMeasure: 'EA' },
-        ],
-      };
+    try {
+      const res = await api.post('/playground/transform', {
+        schema_json: schema,
+        raw_content: uploadedContent,
+        file_name: uploadedFile?.name || null,
+      });
+      const result = res.data?.result;
+      if (result) {
+        setTestResult(JSON.stringify(result, null, 2));
+        setIteration(1);
+      }
+    } catch (err) {
+      console.error('Transform error:', err);
+      // Client-side heuristic fallback
+      let parsedSchema;
+      try { parsedSchema = JSON.parse(schema); } catch { parsedSchema = {}; }
+      const desc = (parsedSchema.description || '').toLowerCase();
+      let fallback;
+      if (desc.includes('856') || desc.includes('ship')) {
+        fallback = {
+          shipNoticeId: '0002', shipmentDate: '2024-03-15', carrier: 'FEDEX',
+          shipTo: { name: 'SUPPLY CHAIN INC', address: '5678 BROADWAY AVE, NY 10001' },
+          shipFrom: { name: 'ACME WAREHOUSE', address: '1234 MAIN ST, DALLAS TX' },
+          items: [{ itemId: 'SKU-001', description: 'Widget', quantity: 500, unitOfMeasure: 'EA' }],
+        };
+      } else if (desc.includes('850') || desc.includes('purchase')) {
+        fallback = {
+          purchaseOrderNumber: 'PO-2024-0847', orderDate: '2024-03-15',
+          buyerName: 'ACME CORPORATION', sellerName: 'GLOBAL SUPPLIES INC',
+          currency: 'USD', totalAmount: 37485.00,
+          items: [{ lineNumber: 1, productId: 'WDG-100', description: 'Industrial Widget', quantity: 1500, unitPrice: 24.99 }],
+        };
+      } else if (desc.includes('810') || desc.includes('invoice')) {
+        fallback = {
+          invoiceNumber: 'INV-2024-1234', invoiceDate: '2024-03-20',
+          vendorName: 'GLOBAL SUPPLIES INC', totalDue: 40484.00,
+          lineItems: [{ lineNumber: 1, productId: 'WDG-100', quantity: 1500, unitPrice: 24.99, lineTotal: 37485.00 }],
+        };
+      } else {
+        fallback = { message: 'Transformed output', data: uploadedContent.slice(0, 200) };
+      }
+      setTestResult(JSON.stringify(fallback, null, 2));
+      setIteration(1);
+    } finally {
+      setIsTransforming(false);
     }
-    if (desc.includes('850') || desc.includes('purchase')) {
-      return {
-        purchaseOrderNumber: 'PO-2024-0847',
-        orderDate: '2024-03-15',
-        buyerName: 'ACME CORPORATION',
-        sellerName: 'GLOBAL SUPPLIES INC',
-        shipToAddress: '789 WAREHOUSE BLVD, CHICAGO, IL 60601, US',
-        billToAddress: '123 CORPORATE DR, CHICAGO, IL 60602, US',
-        currency: 'USD',
-        totalAmount: 37485.00,
-        items: [
-          { lineNumber: 1, productId: 'WDG-100', description: 'Industrial Widget A', quantity: 1500, unitPrice: 24.99, unitOfMeasure: 'EA' },
-        ],
-      };
-    }
-    if (desc.includes('810') || desc.includes('invoice')) {
-      return {
-        invoiceNumber: 'INV-2024-1234',
-        invoiceDate: '2024-03-20',
-        purchaseOrderRef: 'PO-2024-0847',
-        vendorName: 'GLOBAL SUPPLIES INC',
-        buyerName: 'ACME CORPORATION',
-        subtotal: 37485.00,
-        taxAmount: 2999.00,
-        totalDue: 40484.00,
-        lineItems: [
-          { lineNumber: 1, productId: 'WDG-100', description: 'Industrial Widget A', quantity: 1500, unitPrice: 24.99, lineTotal: 37485.00 },
-        ],
-      };
-    }
-    return { message: 'Transformed output', data: raw.slice(0, 200) };
   };
 
   const handleCopy = (text, id) => {

@@ -7,6 +7,7 @@ import { Activity, AlertCircle, BarChart3 } from 'lucide-react';
 export const AnalyticsDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [trendsData, setTrendsData] = useState(null);
+  const [slaData, setSlaData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,12 +19,14 @@ export const AnalyticsDashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const [dashboard, trends] = await Promise.all([
+      const [dashboard, trends, sla] = await Promise.all([
         analyticsService.getDashboard(7),
-        analyticsService.getTrends('documents', 30)
+        analyticsService.getTrends('documents', 30),
+        analyticsService.getSla(7)
       ]);
       setDashboardData(dashboard);
       setTrendsData(trends);
+      setSlaData(sla);
     } catch (err) {
       console.error('Error loading analytics:', err);
       setError(err.response?.data?.detail || err.message || 'Unable to connect to backend');
@@ -135,6 +138,33 @@ export const AnalyticsDashboard = () => {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {slaData && (
+        <Card className="bg-black/60 border-2 border-amber-500/30">
+          <CardHeader>
+            <CardTitle className="text-xl font-black text-amber-400 font-mono">
+              SLA COMPLIANCE
+            </CardTitle>
+            <p className="text-sm text-amber-300/70 font-mono">
+              {slaData.sla_compliance_pct}% compliance • {slaData.breach_count || 0} breach(es)
+            </p>
+          </CardHeader>
+          <CardContent>
+            {slaData.breaches?.length > 0 ? (
+              <ul className="space-y-2 text-sm font-mono">
+                {slaData.breaches.slice(0, 5).map((b) => (
+                  <li key={b.exception_id} className="flex justify-between text-amber-300/90">
+                    <span>{b.exception_type} ({b.severity})</span>
+                    <span>{b.hours_overdue}h overdue</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-amber-300/70 font-mono text-sm">No SLA breaches</p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {trendsData && (

@@ -27,7 +27,7 @@ import { toast } from '@/components/ui/sonner';
 export const Settings = () => {
   const [settings, setSettings] = useState({
     // General Settings
-    platformName: 'AI EDI Platform',
+    platformName: 'Agent Eddy',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
@@ -42,6 +42,7 @@ export const Settings = () => {
     learningEnabled: true,
     
     // EDI Settings
+    ourCompanyIsaId: '',
     defaultEDIStandard: 'X12',
     defaultVersion: '5010',
     defaultCharacterSet: 'UTF-8',
@@ -108,6 +109,7 @@ export const Settings = () => {
           ...prev,
           ...(data.exception_alerts !== undefined && { exceptionAlerts: data.exception_alerts }),
           ...(data.document_alerts !== undefined && { realTimeAlerts: data.document_alerts }),
+          ...(data.our_company_isa_id !== undefined && { ourCompanyIsaId: data.our_company_isa_id || '' }),
         }));
       } catch (err) {
         // API may not be available
@@ -140,6 +142,7 @@ export const Settings = () => {
         slack_webhook_url: settings.slackWebhook || null,
         exception_alerts: settings.exceptionAlerts,
         document_alerts: settings.realTimeAlerts,
+        our_company_isa_id: settings.ourCompanyIsaId?.trim() || null,
       });
       setSlackConfigured(Boolean(settings.slackWebhook));
       setHasChanges(false);
@@ -399,6 +402,19 @@ export const Settings = () => {
               <CardDescription>Default EDI standards and validation rules</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="ourCompanyIsaId">Our Company ISA ID</Label>
+                <Input
+                  id="ourCompanyIsaId"
+                  value={settings.ourCompanyIsaId}
+                  onChange={(e) => handleChange('ourCompanyIsaId', e.target.value)}
+                  placeholder="ACME_CORP"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used to auto-detect Inbound (document sent TO you) vs Outbound (document sent FROM you). Example: ACME_CORP, YOURCOMPANY
+                </p>
+              </div>
+              <Separator />
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="defaultEDIStandard">Default EDI Standard</Label>

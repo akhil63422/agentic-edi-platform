@@ -3,12 +3,13 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.models.audit import AuditLog, AuditLogCreate
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/audit", tags=["audit"])
+router = APIRouter(prefix="/audit", tags=["audit"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 @router.get("/", response_model=List[AuditLog])

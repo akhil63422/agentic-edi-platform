@@ -20,95 +20,82 @@ code {
 
 @layer base {
     :root {
-        /* Dark Game-Style Theme */
-        /* Background colors - Deep dark blue to black gradient */
-        --background: 222 47% 11%;  /* Dark blue-slate */
-        --foreground: 180 100% 90%;  /* Bright cyan text */
+        /* Professional Enterprise Theme */
+        --background: 222 47% 11%;
+        --foreground: 210 40% 96%;
         
-        /* Card and surface colors */
-        --card: 240 100% 6%;  /* Slightly lighter dark */
-        --card-foreground: 180 100% 90%;
-        --card-secondary: 240 100% 8%;
+        --card: 222 47% 9%;
+        --card-foreground: 210 40% 96%;
+        --card-secondary: 222 47% 12%;
         
-        /* Popover */
-        --popover: 240 100% 6%;
-        --popover-foreground: 180 100% 90%;
+        --popover: 222 47% 9%;
+        --popover-foreground: 210 40% 96%;
         
-        /* Primary - Neon Cyan */
-        --primary: 180 100% 50%;  /* Bright cyan #06b6d4 */
-        --primary-foreground: 240 100% 4%;
-        --primary-hover: 180 100% 45%;
+        /* Primary - Professional Blue */
+        --primary: 217 91% 60%;
+        --primary-foreground: 222 47% 11%;
+        --primary-hover: 217 91% 55%;
         
-        /* Secondary - Neon Purple */
-        --secondary: 270 100% 60%;  /* Bright purple */
-        --secondary-foreground: 240 100% 4%;
+        --secondary: 215 28% 17%;
+        --secondary-foreground: 210 40% 96%;
         
-        /* Muted - Dark with subtle glow */
-        --muted: 240 100% 8%;
-        --muted-foreground: 180 50% 60%;
+        --muted: 215 28% 17%;
+        --muted-foreground: 215 20% 65%;
         
-        /* Accent - Neon Pink */
-        --accent: 330 100% 70%;  /* Bright pink */
-        --accent-foreground: 240 100% 4%;
+        --accent: 217 91% 60%;
+        --accent-foreground: 222 47% 11%;
+
+        --success: 142 71% 45%;
+        --success-bg: 142 71% 15%;
+        --success-foreground: 142 71% 90%;
+
+        --warning: 38 92% 50%;
+        --warning-bg: 38 92% 15%;
+        --warning-foreground: 38 92% 90%;
         
-        /* Status colors - Bright neon */
-        --success: 142 100% 50%;  /* Bright green #10b981 */
-        --success-bg: 142 100% 15%;  /* Dark green with glow */
-        --success-foreground: 142 100% 70%;
+        --error: 0 72% 51%;
+        --error-bg: 0 72% 15%;
+        --error-foreground: 0 72% 90%;
         
-        --warning: 45 100% 60%;  /* Bright yellow */
-        --warning-bg: 45 100% 15%;  /* Dark yellow with glow */
-        --warning-foreground: 45 100% 80%;
+        --processing: 217 91% 60%;
+        --processing-foreground: 210 40% 96%;
         
-        --error: 0 100% 60%;  /* Bright red */
-        --error-bg: 0 100% 15%;  /* Dark red with glow */
-        --error-foreground: 0 100% 80%;
+        --border: 215 28% 22%;
+        --input: 215 28% 17%;
+        --ring: 217 91% 60%;
         
-        --processing: 200 100% 50%;  /* Bright blue */
-        --processing-foreground: 200 100% 80%;
-        
-        /* Border and input - Neon glow */
-        --border: 180 100% 30%;  /* Cyan border */
-        --input: 240 100% 8%;
-        --ring: 180 100% 50%;
-        
-        /* Radius */
         --radius: 0.5rem;
         
-        /* Custom design tokens - Glowing shadows */
-        --shadow-sm: 0 1px 2px 0 rgb(6 182 212 / 0.3);
-        --shadow-md: 0 4px 6px -1px rgb(6 182 212 / 0.4), 0 2px 4px -2px rgb(168 85 247 / 0.3);
-        --shadow-lg: 0 10px 15px -3px rgb(6 182 212 / 0.5), 0 4px 6px -4px rgb(168 85 247 / 0.4);
-        --shadow-xl: 0 20px 25px -5px rgb(6 182 212 / 0.6), 0 8px 10px -6px rgb(168 85 247 / 0.5);
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
         
-        /* Transitions */
         --transition-smooth: 150ms cubic-bezier(0.4, 0, 0.2, 1);
         --transition-base: 200ms ease-in-out;
         
-        /* Gradients - Neon game-style */
-        --gradient-primary: linear-gradient(135deg, hsl(180 100% 50%), hsl(270 100% 60%));
-        --gradient-subtle: linear-gradient(180deg, hsl(240 100% 6%), hsl(240 100% 4%));
+        --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%));
+        --gradient-subtle: linear-gradient(180deg, hsl(222 47% 11%), hsl(222 47% 8%));
     }
     
     .dark {
-        /* Same as root for consistent dark theme */
-        --background: 240 100% 4%;
-        --foreground: 180 100% 90%;
-        --card: 240 100% 6%;
-        --card-foreground: 180 100% 90%;
-        --popover: 240 100% 6%;
-        --popover-foreground: 180 100% 90%;
-        --primary: 180 100% 50%;
-        --primary-foreground: 240 100% 4%;
-        --secondary: 270 100% 60%;
-        --secondary-foreground: 240 100% 4%;
-        --muted: 240 100% 8%;
-        --muted-foreground: 180 50% 60%;
-        --accent: 330 100% 70%;
-        --accent-foreground: 240 100% 4%;
-        --border: 180 100% 30%;
-        --input: 240 100% 8%;
-        --ring: 180 100% 50%;
+        --background: 222 47% 8%;
+        --foreground: 210 40% 96%;
+        --card: 222 47% 9%;
+        --card-foreground: 210 40% 96%;
+        --popover: 222 47% 9%;
+        --popover-foreground: 210 40% 96%;
+        --primary: 217 91% 60%;
+        --primary-foreground: 222 47% 11%;
+        --secondary: 215 28% 17%;
+        --secondary-foreground: 210 40% 96%;
+        --muted: 215 28% 17%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 91% 60%;
+        --accent-foreground: 222 47% 11%;
+        --border: 215 28% 22%;
+        --input: 215 28% 17%;
+        --ring: 217 91% 60%;
     }
 }
 
@@ -118,15 +105,8 @@ code {
     }
     body {
         @apply bg-background text-foreground;
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #000000 100%);
+        background: hsl(222 47% 11%);
         background-attachment: fixed;
-        background-image: 
-            linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
-        background-size: 50px 50px;
-        /* Performance optimizations */
-        will-change: auto;
-        transform: translateZ(0);
     }
     
     /* GPU acceleration for animated elements */
@@ -149,12 +129,12 @@ code {
     }
     
     .scrollbar-thin::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, hsl(180 100% 50%), hsl(270 100% 60%));
+        background: hsl(215 28% 35%);
         border-radius: 4px;
     }
     
     .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, hsl(180 100% 60%), hsl(270 100% 70%));
+        background: hsl(215 28% 45%);
     }
 }
 

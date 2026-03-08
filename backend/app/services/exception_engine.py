@@ -132,7 +132,7 @@ class ExceptionEngine:
             exception_type=rule["exception_type"],
             severity=rule["severity"],
             description=f"Rule '{rule['name']}': {rule.get('description', 'Condition matched')}",
-            tags=["rule-based", rule["name"]]
+            tags=["rule-based", rule["name"]],
         )
         
         if escalated:

@@ -62,7 +62,7 @@ export const InboundEDI = () => {
       if (filters.docType !== 'all') params.document_type = filters.docType;
       if (filters.partner !== 'all') params.partner_id = filters.partner;
       
-      const data = await documentsService.getAll(params);
+      const data = await documentsService.getAll({ ...params, forceApi: true });
       
       // Ensure data is an array
       if (!Array.isArray(data)) {
@@ -81,6 +81,7 @@ export const InboundEDI = () => {
         direction: doc.direction,
         status: doc.status,
         currentStage: doc.status,
+        linkedTransactionId: doc.metadata?.outbound_transaction_id || null,
         receivedAt: doc.received_at ? new Date(doc.received_at).toLocaleTimeString() : 'Unknown',
         timestamp: doc.received_at || doc.created_at,
       }));
@@ -89,7 +90,7 @@ export const InboundEDI = () => {
       
       // Calculate KPIs
       try {
-        const allDocs = await documentsService.getAll({ direction: 'Inbound', limit: 1000 });
+        const allDocs = await documentsService.getAll({ direction: 'Inbound', limit: 1000, forceApi: true });
         if (!Array.isArray(allDocs)) {
           console.warn('Invalid KPI data format, using current page data');
           // Use current page data for KPIs
@@ -264,107 +265,13 @@ export const InboundEDI = () => {
     }
   };
 
-  // Transactions loaded from API in useEffect
   const itemsPerPage = 20;
-  
-  // Mock transaction data fallback (for development)
-  const mockTransactions = [
-    {
-      id: 'PO_8932',
-      fileId: 'PO_8932',
-      partner: 'Walmart',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'Completed',
-      currentStage: 'ERP Posted',
-      receivedAt: '10:42 AM',
-      timestamp: '2024-01-15 10:42',
-    },
-    {
-      id: 'PO_8932_2',
-      fileId: 'PO_8932',
-      partner: 'Walmart',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'Needs Review',
-      currentStage: 'Agentic AI',
-      receivedAt: '10:20 AM',
-      timestamp: '2024-01-15 10:20',
-    },
-    {
-      id: 'PO_8933',
-      fileId: 'PO_8933',
-      partner: 'Walmart',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'Failed',
-      currentStage: 'ERP Posted',
-      receivedAt: '09:57 AM',
-      timestamp: '2024-01-15 09:57',
-    },
-    {
-      id: 'PO_8934',
-      fileId: 'PO_8934',
-      partner: 'Target',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'ERP Posted',
-      currentStage: 'Agentic AI',
-      receivedAt: '8:31 AM',
-      timestamp: '2024-01-15 08:31',
-    },
-    {
-      id: 'PO_8935',
-      fileId: 'PO_8935',
-      partner: 'Target',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'Completed',
-      currentStage: 'ERP Posted',
-      receivedAt: '7:14 AM',
-      timestamp: '2024-01-15 07:14',
-    },
-    {
-      id: 'PO_8936',
-      fileId: 'PO_8936',
-      partner: 'Target',
-      docType: 'X12 850',
-      direction: 'Inbound',
-      status: 'Parsing EDI',
-      currentStage: 'Parsing EDI',
-      receivedAt: '6:53 AM',
-      timestamp: '2024-01-15 06:53',
-    },
-    {
-      id: 'INV_4521',
-      fileId: 'INV_4521',
-      partner: 'Amazon',
-      docType: 'X12 810',
-      direction: 'Inbound',
-      status: 'Completed',
-      currentStage: 'ERP Posted',
-      receivedAt: '6:30 AM',
-      timestamp: '2024-01-15 06:30',
-    },
-    {
-      id: 'ASN_7834',
-      fileId: 'ASN_7834',
-      partner: 'Home Depot',
-      docType: 'X12 856',
-      direction: 'Inbound',
-      status: 'Processing',
-      currentStage: 'Agentic AI',
-      receivedAt: '6:15 AM',
-      timestamp: '2024-01-15 06:15',
-    },
-  ];
-
-  const totalItems = 1309;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
       'Completed': { variant: 'success', icon: CheckCircle2, bg: 'bg-success-bg', text: 'text-success-foreground' },
+      'Ready for Dispatch': { variant: 'processing', icon: CheckCircle2, bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
+      'Dispatched': { variant: 'success', icon: CheckCircle2, bg: 'bg-success-bg', text: 'text-success-foreground' },
       'Needs Review': { variant: 'warning', icon: AlertTriangle, bg: 'bg-warning-bg', text: 'text-warning-foreground' },
       'Failed': { variant: 'error', icon: XCircle, bg: 'bg-error-bg', text: 'text-error-foreground' },
       'Processing': { variant: 'processing', icon: Clock, bg: 'bg-processing', text: 'text-processing-foreground' },
@@ -407,6 +314,9 @@ export const InboundEDI = () => {
     }
     return true;
   });
+
+  const totalItems = filteredTransactions.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -502,6 +412,8 @@ export const InboundEDI = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="Ready for Dispatch">Ready for Dispatch</SelectItem>
+                  <SelectItem value="Dispatched">Dispatched</SelectItem>
                   <SelectItem value="Completed">Completed</SelectItem>
                   <SelectItem value="Needs Review">Needs Review</SelectItem>
                   <SelectItem value="Processing">Processing</SelectItem>
@@ -539,6 +451,7 @@ export const InboundEDI = () => {
                   <TableHead className="font-semibold">Direction</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">Current Stage</TableHead>
+                  <TableHead className="font-semibold">Linked Transaction</TableHead>
                   <TableHead className="font-semibold">Received At</TableHead>
                   <TableHead className="font-semibold text-right">Actions</TableHead>
                 </TableRow>
@@ -583,6 +496,20 @@ export const InboundEDI = () => {
                       </TableCell>
                       <TableCell>{getStatusBadge(tx.status)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.currentStage}</TableCell>
+                      <TableCell>
+                        {tx.linkedTransactionId ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 font-mono text-xs"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/document/${tx.linkedTransactionId}`); }}
+                          >
+                            {tx.linkedTransactionId.slice(-12)}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.receivedAt}</TableCell>
                       <TableCell 
                         className="text-right"
@@ -602,7 +529,7 @@ export const InboundEDI = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No transactions found matching your filters
                     </TableCell>
                   </TableRow>

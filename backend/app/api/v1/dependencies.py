@@ -2,10 +2,11 @@
 Dependencies for API routes
 """
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from bson import ObjectId
 from app.core.database import get_database
+from app.core.config import settings
 from app.core.security import decode_access_token
 from app.api.v1.auth import get_current_user
 from app.models.user import User
@@ -13,7 +14,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+async def require_auth_if_enabled(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db=Depends(get_database),
+):
+    """When AUTH_REQUIRED=True, enforce authentication. Otherwise allow anonymous."""
+    if not settings.AUTH_REQUIRED:
+        return None
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return await get_current_user(credentials.credentials, db)
 
 
 async def get_current_active_user(current_user: dict = Depends(get_current_user)) -> dict:

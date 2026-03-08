@@ -1,16 +1,43 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
+import httpx
 from app.core.database import get_database
 from app.models.partner import TradingPartner, TradingPartnerCreate, TradingPartnerUpdate
 from app.models.audit import AuditLogCreate
-from app.api.v1.dependencies import get_optional_user
+from app.api.v1.dependencies import get_optional_user, require_auth_if_enabled
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/partners", tags=["partners"])
+router = APIRouter(prefix="/partners", tags=["partners"], dependencies=[Depends(require_auth_if_enabled)])
+
+
+class TestERPConnectionRequest(BaseModel):
+    endpoint: str
+    api_key: Optional[str] = None
+    type: Optional[str] = "API"
+
+
+@router.post("/test-erp-connection")
+async def test_erp_connection(req: TestERPConnectionRequest):
+    """Test ERP endpoint connectivity (does not validate credentials fully)."""
+    try:
+        headers = {"Content-Type": "application/json"}
+        if req.api_key:
+            headers["Authorization"] = f"Bearer {req.api_key}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            # Use HEAD or GET to verify endpoint is reachable
+            resp = await client.get(req.endpoint.rstrip("/") + "/", headers=headers)
+            if resp.status_code < 500:
+                return {"success": True, "message": "Endpoint reachable"}
+            return {"success": False, "message": f"HTTP {resp.status_code}"}
+    except httpx.ConnectError as e:
+        return {"success": False, "message": f"Connection failed: {str(e)[:100]}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)[:100]}
 
 
 @router.get("/", response_model=List[TradingPartner])
@@ -35,11 +62,18 @@ async def get_partners(
         cursor = db.trading_partners.find(query).sort("created_at", -1).skip(skip).limit(limit)
         partners = await cursor.to_list(length=limit)
         
-        # Convert ObjectId to string
+        # Normalize documents for response (handle legacy schema: partner_name vs business_name, missing role)
+        normalized = []
         for partner in partners:
-            partner["_id"] = str(partner["_id"])
+            p = dict(partner)
+            p["_id"] = str(p["_id"])
+            if not p.get("business_name") and p.get("partner_name"):
+                p["business_name"] = p["partner_name"]
+            if not p.get("role"):
+                p["role"] = "Both"
+            normalized.append(p)
         
-        return partners
+        return normalized
     except Exception as e:
         logger.error(f"Error fetching partners: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -56,8 +90,13 @@ async def get_partner(partner_id: str, db=Depends(get_database)):
         if not partner:
             raise HTTPException(status_code=404, detail="Partner not found")
         
-        partner["_id"] = str(partner["_id"])
-        return partner
+        p = dict(partner)
+        p["_id"] = str(p["_id"])
+        if not p.get("business_name") and p.get("partner_name"):
+            p["business_name"] = p["partner_name"]
+        if not p.get("role"):
+            p["role"] = "Both"
+        return p
     except HTTPException:
         raise
     except Exception as e:

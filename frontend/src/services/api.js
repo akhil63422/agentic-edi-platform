@@ -23,7 +23,12 @@ const configReady = fetch(`/config.json?t=${Date.now()}`)
         try {
           const configHost = new URL(url).hostname;
           const currentHost = window.location.hostname;
-          if (configHost !== currentHost && /trycloudflare\.com|ngrok|localhost|127\.0\.0\.1/.test(currentHost)) {
+          const isConfigLocal = /^localhost$|^127\.0\.0\.1$/.test(configHost);
+          const isCurrentLocal = /^localhost$|^127\.0\.0\.1$/.test(currentHost);
+          // When both are local (localhost/127.0.0.1), always use config URL - different ports are fine
+          if (isConfigLocal && isCurrentLocal) {
+            api.defaults.baseURL = url;
+          } else if (configHost !== currentHost && /trycloudflare\.com|ngrok/.test(currentHost)) {
             api.defaults.baseURL = window.location.origin + '/api/v1';
           } else {
             api.defaults.baseURL = url;

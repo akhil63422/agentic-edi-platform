@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 from app.workers.document_processor import processor
+from app.workers.ingestion_worker import run_ingestion_cycle
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/process", tags=["process"])
+router = APIRouter(prefix="/process", tags=["process"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 @router.post("/document/{document_id}")
@@ -38,3 +40,10 @@ async def process_document(
     except Exception as e:
         logger.error(f"Error starting document processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ingestion/poll")
+async def trigger_ingestion_poll(background_tasks: BackgroundTasks):
+    """Manually trigger one ingestion cycle (poll SFTP/S3 for all partners with schedule)."""
+    background_tasks.add_task(run_ingestion_cycle)
+    return {"message": "Ingestion poll started", "status": "Running"}

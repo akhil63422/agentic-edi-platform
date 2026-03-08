@@ -17,25 +17,43 @@ export const ActivityTable = ({ data }) => {
   
   const getStatusBadge = (status) => {
     const statusMap = {
-      completed: { 
-        label: 'COMPLETED', 
-        className: 'bg-gradient-to-r from-green-600/30 to-emerald-600/30 border-2 border-green-500/50 text-green-300 font-mono font-bold text-xs px-2 py-1 rounded shadow-lg shadow-green-500/30' 
+      completed: {
+        label: 'Completed',
+        className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-2 py-0.5 rounded font-medium'
       },
-      warning: { 
-        label: 'WARNING', 
-        className: 'bg-gradient-to-r from-yellow-600/30 to-amber-600/30 border-2 border-yellow-500/50 text-yellow-300 font-mono font-bold text-xs px-2 py-1 rounded shadow-lg shadow-yellow-500/30' 
+      'ready for dispatch': {
+        label: 'Ready for Dispatch',
+        className: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs px-2 py-0.5 rounded font-medium'
       },
-      error: { 
-        label: 'ERROR', 
-        className: 'bg-gradient-to-r from-red-600/30 to-pink-600/30 border-2 border-red-500/50 text-red-300 font-mono font-bold text-xs px-2 py-1 rounded shadow-lg shadow-red-500/30' 
+      dispatched: {
+        label: 'Dispatched',
+        className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-2 py-0.5 rounded font-medium'
       },
-      processing: { 
-        label: 'PROCESSING', 
-        className: 'bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border-2 border-cyan-500/50 text-cyan-300 font-mono font-bold text-xs px-2 py-1 rounded shadow-lg shadow-cyan-500/30' 
+      delivered: {
+        label: 'Delivered',
+        className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-2 py-0.5 rounded font-medium'
       },
+      warning: {
+        label: 'Warning',
+        className: 'bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2 py-0.5 rounded font-medium'
+      },
+      error: {
+        label: 'Error',
+        className: 'bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded font-medium'
+      },
+      failed: {
+        label: 'Failed',
+        className: 'bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded font-medium'
+      },
+      processing: {
+        label: 'Processing',
+        className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded font-medium'
+      },
+      routing: { label: 'Routing', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded font-medium' },
+      delivering: { label: 'Delivering', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded font-medium' },
     };
     
-    const config = statusMap[status.toLowerCase()] || statusMap.processing;
+    const config = statusMap[(status || '').toLowerCase()] || { label: status || 'Processing', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded font-medium' };
     return <span className={config.className}>{config.label}</span>;
   };
   
@@ -44,29 +62,29 @@ export const ActivityTable = ({ data }) => {
   };
   
   return (
-    <div className="rounded-lg border-2 border-cyan-500/30 bg-black/60 overflow-hidden shadow-2xl shadow-cyan-500/10">
+    <div className="rounded-xl border border-slate-700 bg-slate-900/80 overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow className="bg-black/60 border-b-2 border-cyan-500/30">
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">File ID</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Timestamp</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Partner</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Doc Type</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Direction</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Status</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase">Current Stage</TableHead>
-            <TableHead className="font-bold text-cyan-300 font-mono text-xs uppercase text-right">Actions</TableHead>
+          <TableRow className="bg-slate-800/80 border-b border-slate-700 hover:bg-slate-800/80">
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">File ID</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Timestamp</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Partner</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Doc Type</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Direction</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Status</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase">Current Stage</TableHead>
+            <TableHead className="text-xs font-medium text-slate-400 uppercase text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.map((row) => (
             <TableRow 
               key={row.id} 
-              className="hover:bg-black/60 transition-colors cursor-pointer border-b border-cyan-500/10"
+              className="hover:bg-slate-800/50 transition-colors cursor-pointer border-b border-slate-700/50"
               onClick={() => handleViewDetails(row.id)}
             >
               <TableCell 
-                className="font-mono text-sm text-cyan-300 font-bold hover:text-cyan-200"
+                className="text-sm font-medium text-white"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleViewDetails(row.id);
@@ -74,27 +92,29 @@ export const ActivityTable = ({ data }) => {
               >
                 {row.id}
               </TableCell>
-              <TableCell className="font-mono text-sm text-purple-300/70">{row.timestamp}</TableCell>
+              <TableCell className="text-sm text-slate-400">{row.timestamp}</TableCell>
               <TableCell>
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-600/30 to-pink-600/30 border-2 border-purple-500/50 rounded-md flex items-center justify-center">
-                    <span className="text-xs font-bold text-purple-300">{row.partner.charAt(0)}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center">
+                    <span className="text-xs font-medium text-slate-300">{row.partner.charAt(0)}</span>
                   </div>
-                  <span className="font-bold text-cyan-200">{row.partner}</span>
+                  <span className="text-sm font-medium text-slate-200">{row.partner}</span>
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className="font-mono bg-black/60 border-2 border-cyan-500/30 text-cyan-300">{row.docType}</Badge>
+                <Badge variant="secondary" className="bg-slate-700/80 text-slate-300 border-0 text-xs">
+                  {row.docType}
+                </Badge>
               </TableCell>
               <TableCell>
-                <Badge className={row.direction === 'Inbound' 
-                  ? 'bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border-2 border-cyan-500/50 text-cyan-300 font-mono font-bold'
-                  : 'bg-gradient-to-r from-purple-600/30 to-pink-600/30 border-2 border-purple-500/50 text-purple-300 font-mono font-bold'}>
+                <Badge variant="secondary" className={row.direction === 'Inbound' 
+                  ? 'bg-blue-500/20 text-blue-400 border-0 text-xs'
+                  : 'bg-slate-600/80 text-slate-300 border-0 text-xs'}>
                   {row.direction}
                 </Badge>
               </TableCell>
               <TableCell>{getStatusBadge(row.status)}</TableCell>
-              <TableCell className="text-sm text-cyan-400/70 font-mono">{row.stage}</TableCell>
+              <TableCell className="text-sm text-slate-400">{row.stage}</TableCell>
               <TableCell className="text-right">
                 <Button
                   variant="ghost"
@@ -103,9 +123,9 @@ export const ActivityTable = ({ data }) => {
                     e.stopPropagation();
                     handleViewDetails(row.id);
                   }}
-                  className="hover:bg-cyan-600/30 hover:border-cyan-500/50 border-2 border-transparent"
+                  className="hover:bg-slate-700 text-slate-400 hover:text-white"
                 >
-                  <Eye className="w-4 h-4 text-cyan-400" />
+                  <Eye className="w-4 h-4" />
                 </Button>
               </TableCell>
             </TableRow>

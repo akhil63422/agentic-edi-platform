@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Eddy Platform – Architecture Diagram</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #f0f4ff;
+  font-family: 'Nunito', sans-serif;
+  min-height: 100vh;
+  padding: 36px 24px 60px;
+}
+
+/* ── Page header ── */
+.page-header {
+  text-align: center;
+  margin-bottom: 44px;
+}
+.page-header .kicker {
+  display: inline-block;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #6366f1;
+  background: #e0e7ff;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+.page-header h1 {
+  font-size: clamp(26px, 4vw, 48px);
+  font-weight: 900;
+  color: #1e1b4b;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+.page-header h1 span { color: #6366f1; }
+.page-header p {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 40px;
+}
+.leg { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#374151; }
+.leg-dot { width:13px; height:13px; border-radius:3px; flex-shrink:0; }
+
+/* ── Main canvas ── */
+.canvas {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Swimlane ── */
+.lane {
+  display: flex;
+  align-items: stretch;
+  border-radius: 16px;
+  margin-bottom: 0;
+  overflow: visible;
+  position: relative;
+}
+.lane + .lane { margin-top: 0; }
+
+.lane-tab {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 22px 10px;
+  border-radius: 14px 0 0 14px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lane-body {
+  flex: 1;
+  padding: 22px 24px;
+  border-radius: 0 14px 14px 0;
+}
+
+/* Lane color themes */
+.lane-partners .lane-tab  { background:#ff6b6b; color:#fff; }
+.lane-partners .lane-body { background:#fff5f5; border: 2px solid #fecaca; border-left: none; }
+
+.lane-transport .lane-tab  { background:#f59e0b; color:#fff; }
+.lane-transport .lane-body { background:#fffbeb; border: 2px solid #fde68a; border-left: none; }
+
+.lane-platform .lane-tab  { background:#6366f1; color:#fff; }
+.lane-platform .lane-body { background:#eef2ff; border: 2px solid #c7d2fe; border-left: none; }
+
+.lane-standards .lane-tab  { background:#10b981; color:#fff; }
+.lane-standards .lane-body { background:#ecfdf5; border: 2px solid #a7f3d0; border-left: none; }
+
+.lane-erp .lane-tab  { background:#8b5cf6; color:#fff; }
+.lane-erp .lane-body { background:#f5f3ff; border: 2px solid #ddd6fe; border-left: none; }
+
+/* ── Lane section title ── */
+.lane-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Node grid ── */
+.node-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* ── Individual node card ── */
+.node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  min-width: 110px;
+  text-align: center;
+  border: 2px solid;
+  position: relative;
+  transition: transform .18s, box-shadow .18s;
+  cursor: default;
+  background: #fff;
+}
+.node:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+
+.node-emoji { font-size: 26px; margin-bottom: 6px; line-height: 1; }
+.node-label {
+  font-weight: 800;
+  font-size: 12px;
+  color: #1f2937;
+  line-height: 1.3;
+}
+.node-sub {
+  font-family: 'Fira Code', monospace;
+  font-size: 9.5px;
+  color: #9ca3af;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.node-tag {
+  position: absolute;
+  top: -8px; right: -8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* node color variants */
+.n-red    { border-color: #fca5a5; }  .n-red .node-label    { color: #b91c1c; }
+.n-amber  { border-color: #fcd34d; }  .n-amber .node-label  { color: #92400e; }
+.n-indigo { border-color: #a5b4fc; }  .n-indigo .node-label { color: #3730a3; }
+.n-green  { border-color: #6ee7b7; }  .n-green .node-label  { color: #065f46; }
+.n-purple { border-color: #c4b5fd; }  .n-purple .node-label { color: #5b21b6; }
+.n-blue   { border-color: #93c5fd; }  .n-blue .node-label   { color: #1d4ed8; }
+.n-pink   { border-color: #f9a8d4; }  .n-pink .node-label   { color: #9d174d; }
+.n-teal   { border-color: #5eead4; }  .n-teal .node-label   { color: #0f766e; }
+.n-orange { border-color: #fdba74; }  .n-orange .node-label { color: #9a3412; }
+
+/* ── ARROW ROW between lanes ── */
+.arrow-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  gap: 0;
+}
+.arrow-spacer { min-width: 36px; flex-shrink:0; }
+.arrow-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 4px 24px;
+}
+.flow-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-family: 'Fira Code', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1.5px solid;
+  white-space: nowrap;
+}
+.fp-red    { background:#fff1f2; border-color:#fca5a5; color:#be123c; }
+.fp-amber  { background:#fffbeb; border-color:#fcd34d; color:#b45309; }
+.fp-indigo { background:#eef2ff; border-color:#a5b4fc; color:#4338ca; }
+.fp-green  { background:#ecfdf5; border-color:#6ee7b7; color:#047857; }
+.fp-purple { background:#f5f3ff; border-color:#c4b5fd; color:#6d28d9; }
+.fp-blue   { background:#eff6ff; border-color:#93c5fd; color:#1d4ed8; }
+.arrow-sym { font-size: 18px; }
+
+/* ── BIG PLATFORM BLOCK ── */
+.platform-block {
+  background: #fff;
+  border: 2px solid #c7d2fe;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.platform-header {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.platform-logo {
+  width: 42px; height: 42px;
+  background: rgba(255,255,255,.2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.platform-name {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+.platform-tagline {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,.7);
+  margin-top: 2px;
+}
+.platform-layers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0;
+}
+.p-layer {
+  padding: 16px 18px;
+  border-right: 1.5px solid #e0e7ff;
+  border-bottom: 1.5px solid #e0e7ff;
+}
+.p-layer:last-child { border-right: none; }
+.p-layer-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.p-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.chip {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1.5px solid;
+}
+
+/* chip color sets */
+.chip-i { background:#eef2ff; border-color:#a5b4fc; color:#4338ca; }
+.chip-g { background:#ecfdf5; border-color:#6ee7b7; color:#047857; }
+.chip-a { background:#fffbeb; border-color:#fcd34d; color:#92400e; }
+.chip-p { background:#f5f3ff; border-color:#c4b5fd; color:#6d28d9; }
+.chip-b { background:#eff6ff; border-color:#93c5fd; color:#1e40af; }
+.chip-r { background:#fff1f2; border-color:#fca5a5; color:#be123c; }
+.chip-t { background:#f0fdfa; border-color:#5eead4; color:#0f766e; }
+
+/* ── TX CARDS (transaction sets) ── */
+.tx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.tx-card {
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 2px solid;
+  background: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.tx-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+}
+.tx-code {
+  font-family: 'Fira Code', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  display: block;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.tx-name { font-weight: 800; font-size: 12px; display: block; margin-bottom: 4px; }
+.tx-std  { font-family:'Fira Code',monospace; font-size:9px; display:block; margin-bottom:4px; }
+.tx-desc { font-size: 10.5px; color: #6b7280; line-height: 1.5; }
+
+.tc-850  { border-color:#bfdbfe; } .tc-850::before { background:#3b82f6; } .tc-850 .tx-code { color:#1d4ed8; } .tc-850 .tx-name { color:#1e3a8a; }
+.tc-855  { border-color:#bbf7d0; } .tc-855::before { background:#22c55e; } .tc-855 .tx-code { color:#15803d; } .tc-855 .tx-name { color:#14532d; }
+.tc-856  { border-color:#ddd6fe; } .tc-856::before { background:#8b5cf6; } .tc-856 .tx-code { color:#6d28d9; } .tc-856 .tx-name { color:#4c1d95; }
+.tc-810  { border-color:#fed7aa; } .tc-810::before { background:#f97316; } .tc-810 .tx-code { color:#c2410c; } .tc-810 .tx-name { color:#7c2d12; }
+.tc-840  { border-color:#fecaca; } .tc-840::before { background:#ef4444; } .tc-840 .tx-code { color:#b91c1c; } .tc-840 .tx-name { color:#7f1d1d; }
+.tc-875  { border-color:#fbcfe8; } .tc-875::before { background:#ec4899; } .tc-875 .tx-code { color:#be185d; } .tc-875 .tx-name { color:#831843; }
+.tc-997  { border-color:#e9d5ff; } .tc-997::before { background:#a855f7; } .tc-997 .tx-code { color:#7e22ce; } .tc-997 .tx-name { color:#581c87; }
+.tc-edif { border-color:#a7f3d0; } .tc-edif::before { background:#10b981; } .tc-edif .tx-code { color:#047857; } .tc-edif .tx-name { color:#064e3b; }
+
+/* ── Flow steps (numbered) ── */
+.flow-steps {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-top: 14px;
+}
+.fs {
+  flex: 1;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+.fs:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -14px;
+  top: 10px;
+  font-size: 18px;
+  color: #a5b4fc;
+  z-index: 1;
+  font-weight: 900;
+}
+.fs-num {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 14px;
+  color: #fff;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  position: relative; z-index: 1;
+}
+.fs-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  color: #374151;
+  line-height: 1.4;
+  padding: 0 4px;
+}
+.fs-sub {
+  font-family: 'Fira Code', monospace;
+  font-size: 8.5px;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 3px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+/* step bg colors cycling */
+.sn1 { background: #ef4444; }
+.sn2 { background: #f97316; }
+.sn3 { background: #eab308; }
+.sn4 { background: #22c55e; }
+.sn5 { background: #06b6d4; }
+.sn6 { background: #6366f1; }
+.sn7 { background: #8b5cf6; }
+.sn8 { background: #ec4899; }
+.sn9 { background: #10b981; }
+.sn10{ background: #3b82f6; }
+
+/* ── ERP module badges ── */
+.erp-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.erp-node {
+  background: #fff;
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 110px;
+  gap: 6px;
+  transition: transform .18s;
+}
+.erp-node:hover { transform: translateY(-3px); }
+.erp-icon { font-size: 24px; }
+.erp-title { font-weight: 800; font-size: 12px; }
+.erp-mod   { font-family:'Fira Code',monospace; font-size:9px; color:#9ca3af; line-height:1.5; }
+
+.erp-gold   { border-color:#fde68a; background: linear-gradient(145deg,#fff,#fffbeb); }
+.erp-gold .erp-title { color:#92400e; }
+.erp-blue   { border-color:#bfdbfe; background: linear-gradient(145deg,#fff,#eff6ff); }
+.erp-blue .erp-title { color:#1e40af; }
+.erp-green  { border-color:#a7f3d0; background: linear-gradient(145deg,#fff,#ecfdf5); }
+.erp-green .erp-title { color:#065f46; }
+.erp-purple { border-color:#ddd6fe; background: linear-gradient(145deg,#fff,#f5f3ff); }
+.erp-purple .erp-title { color:#5b21b6; }
+.erp-pink   { border-color:#fbcfe8; background: linear-gradient(145deg,#fff,#fdf2f8); }
+.erp-pink .erp-title { color:#9d174d; }
+
+/* ── Standard badge row ── */
+.std-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.std-badge {
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid;
+}
+.sb-x12   { background:#eff6ff; border-color:#3b82f6; color:#1e40af; }
+.sb-edif  { background:#ecfdf5; border-color:#10b981; color:#065f46; }
+.sb-json  { background:#fffbeb; border-color:#f59e0b; color:#92400e; }
+.sb-xml   { background:#fff1f2; border-color:#ef4444; color:#991b1b; }
+
+/* Stagger-in animation */
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(20px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.lane       { animation: fadeUp .5s ease both; }
+.lane:nth-child(1) { animation-delay:.05s; }
+.lane:nth-child(2) { animation-delay:.15s; }
+.lane:nth-child(3) { animation-delay:.25s; }
+.lane:nth-child(4) { animation-delay:.35s; }
+.lane:nth-child(5) { animation-delay:.45s; }
+.arrow-row  { animation: fadeUp .4s ease both; animation-delay:.1s; }
+
+/* footer */
+.footer { text-align:center; margin-top:36px; font-family:'Fira Code',monospace; font-size:10px; color:#9ca3af; letter-spacing:1.5px; }
+
+@media(max-width:700px){
+  .platform-layers { grid-template-columns:1fr; }
+  .tx-grid { grid-template-columns: repeat(2,1fr); }
+  .flow-steps { gap: 4px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════ PAGE HEADER ════ -->
+<div class="page-header">
+  <div class="kicker">// architecture overview v1.0</div>
+  <h1>Agent Eddy <span>Platform</span></h1>
+  <p>End-to-End EDI Integration · X12 · EDIFACT · JSON · XML</p>
+</div>
+
+<!-- ════ LEGEND ════ -->
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#ff6b6b"></div>Trading Partners</div>
+  <div class="leg"><div class="leg-dot" style="background:#f59e0b"></div>Transport &amp; Comms</div>
+  <div class="leg"><div class="leg-dot" style="background:#6366f1"></div>Agent Eddy Platform Core</div>
+  <div class="leg"><div class="leg-dot" style="background:#10b981"></div>EDI Standards Engine</div>
+  <div class="leg"><div class="leg-dot" style="background:#8b5cf6"></div>Backend / ERP Systems</div>
+</div>
+
+<!-- ════ CANVAS ════ -->
+<div class="canvas">
+
+  <!-- ▓▓ LANE 1 – TRADING PARTNERS ▓▓ -->
+  <div class="lane lane-partners">
+    <div class="lane-tab">Partners</div>
+    <div class="lane-body">
+      <div class="lane-title" style="color:#b91c1c">🤝 External Trading Partners</div>
+      <div class="node-grid">
+        <div class="node n-red">
+          <div class="node-emoji">🏭</div>
+          <div class="node-label">Suppliers</div>
+          <div class="node-sub">Vendor / Mfr.</div>
+        </div>
+        <div class="node n-red">
+          <div class="node-emoji">🛒</div>
+          <div class="node-label">Buyers &amp; Retailers</div>
+          <div class="node-sub">Customer side</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">🚛</div>
+          <div class="node-label">3PL / Carriers</div>
+          <div class="node-sub">Logistics partners</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">🏦</div>
+          <div class="node-label">Banks / Fintech</div>
+          <div class="node-sub">Payment networks</div>
+        </div>
+        <div class="node n-red">
+          <div class="node-emoji">🏢</div>
+          <div class="node-label">Gov / Customs</div>
+          <div class="node-sub">Regulatory bodies</div>
+        </div>
+        <div class="node n-red">
+          <div class="node-emoji">🏥</div>
+          <div class="node-label">Healthcare Payers</div>
+          <div class="node-sub">Insurance / CMS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow 1 -->
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-body">
+      <span class="flow-pill fp-red">⬇ EDI Files (Raw X12 / EDIFACT)</span>
+      <span class="flow-pill fp-amber">⬆ Functional ACK (997 / CONTRL)</span>
+      <span class="flow-pill fp-red">⬇ JSON / XML Payloads</span>
+      <span class="flow-pill fp-amber">⬆ Status Notifications</span>
+    </div>
+  </div>
+
+  <!-- ▓▓ LANE 2 – TRANSPORT ▓▓ -->
+  <div class="lane lane-transport">
+    <div class="lane-tab">Transport</div>
+    <div class="lane-body">
+      <div class="lane-title" style="color:#b45309">📡 Communication &amp; Transport Protocols</div>
+      <div class="node-grid">
+        <div class="node n-amber">
+          <div class="node-emoji">🔐</div>
+          <div class="node-label">AS2</div>
+          <div class="node-sub">Secure HTTPS<br>Drummond Certified</div>
+          <span class="node-tag" style="background:#f59e0b">✓ CERT</span>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">📂</div>
+          <div class="node-label">SFTP / FTP</div>
+          <div class="node-sub">File batch transfer</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">🌐</div>
+          <div class="node-label">REST / SOAP API</div>
+          <div class="node-sub">HTTP / HTTPS</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">💬</div>
+          <div class="node-label">MQ / Kafka</div>
+          <div class="node-sub">Async messaging</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">📧</div>
+          <div class="node-label">SMTP / Email</div>
+          <div class="node-sub">EDI via email</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">🔗</div>
+          <div class="node-label">VAN</div>
+          <div class="node-sub">Value Added Network</div>
+        </div>
+        <div class="node n-amber">
+          <div class="node-emoji">☁️</div>
+          <div class="node-label">AS4 / ebMS3</div>
+          <div class="node-sub">Cloud / Gov standard</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow 2 -->
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-body">
+      <span class="flow-pill fp-indigo">⬇ Inbound EDI Message</span>
+      <span class="flow-pill fp-indigo">⬆ Outbound EDI Response</span>
+      <span class="flow-pill fp-green">⬇ Webhook / REST Call</span>
+      <span class="flow-pill fp-purple">⬆ Event Notification</span>
+    </div>
+  </div>
+
+  <!-- ▓▓ LANE 3 – PLATFORM CORE ▓▓ -->
+  <div class="lane lane-platform">
+    <div class="lane-tab">Platform Core</div>
+    <div class="lane-body">
+      <div class="lane-title" style="color:#3730a3">⚡ Agent Eddy Platform — Core Processing Engine</div>
+
+      <!-- Platform block -->
+      <div class="platform-block">
+        <div class="platform-header">
+          <div class="platform-logo">⬡</div>
+          <div>
+            <div class="platform-name">Agent Eddy Platform</div>
+            <div class="platform-tagline">// api-led · event-driven · multi-standard b2b integration engine</div>
+          </div>
+        </div>
+        <div class="platform-layers">
+
+          <div class="p-layer">
+            <div class="p-layer-title" style="color:#6366f1">🖥️ Experience Layer</div>
+            <div class="p-chips">
+              <span class="chip chip-i">Partner Portal</span>
+              <span class="chip chip-i">Transaction Monitor</span>
+              <span class="chip chip-i">Error Dashboard</span>
+              <span class="chip chip-i">Onboarding Wizard</span>
+              <span class="chip chip-i">Audit Trail UI</span>
+              <span class="chip chip-i">SLA Dashboard</span>
+            </div>
+          </div>
+
+          <div class="p-layer">
+            <div class="p-layer-title" style="color:#059669">⚙️ Process Layer</div>
+            <div class="p-chips">
+              <span class="chip chip-g">Parse &amp; Validate</span>
+              <span class="chip chip-g">Transform Engine</span>
+              <span class="chip chip-g">Business Rules</span>
+              <span class="chip chip-g">ACK Generator</span>
+              <span class="chip chip-g">Smart Routing</span>
+              <span class="chip chip-g">Error Recovery</span>
+              <span class="chip chip-g">De-duplication</span>
+              <span class="chip chip-g">Retry Logic</span>
+            </div>
+          </div>
+
+          <div class="p-layer">
+            <div class="p-layer-title" style="color:#d97706">🔌 Connector Layer</div>
+            <div class="p-chips">
+              <span class="chip chip-a">Oracle Connector</span>
+              <span class="chip chip-a">SAP Connector</span>
+              <span class="chip chip-a">Salesforce Conn.</span>
+              <span class="chip chip-a">REST / SOAP</span>
+              <span class="chip chip-a">DB Connector</span>
+              <span class="chip chip-a">Kafka Connector</span>
+              <span class="chip chip-a">RabbitMQ Conn.</span>
+            </div>
+          </div>
+
+          <div class="p-layer">
+            <div class="p-layer-title" style="color:#7c3aed">🛡️ Platform Services</div>
+            <div class="p-chips">
+              <span class="chip chip-p">API Gateway</span>
+              <span class="chip chip-p">Auth / OAuth2</span>
+              <span class="chip chip-p">Secrets Vault</span>
+              <span class="chip chip-p">Object Store</span>
+              <span class="chip chip-p">Scheduler</span>
+              <span class="chip chip-p">Rate Limiter</span>
+              <span class="chip chip-p">Logging &amp; Tracing</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Processing flow steps -->
+      <div class="lane-title" style="color:#3730a3;margin-top:4px;">🔄 End-to-End Processing Flow</div>
+      <div class="flow-steps">
+        <div class="fs">
+          <div class="fs-num sn1">1</div>
+          <div class="fs-label">Receive</div>
+          <div class="fs-sub">AS2 / SFTP<br>/ REST</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn2">2</div>
+          <div class="fs-label">Detect Standard</div>
+          <div class="fs-sub">X12 / EDIFACT<br>/ JSON / XML</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn3">3</div>
+          <div class="fs-label">Parse &amp; Validate</div>
+          <div class="fs-sub">Syntax +<br>Business rules</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn4">4</div>
+          <div class="fs-label">Send ACK</div>
+          <div class="fs-sub">997 / CONTRL<br>auto-generated</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn5">5</div>
+          <div class="fs-label">Transform</div>
+          <div class="fs-sub">Map to internal<br>canonical model</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn6">6</div>
+          <div class="fs-label">Route</div>
+          <div class="fs-sub">Business rules<br>→ target system</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn7">7</div>
+          <div class="fs-label">Post to ERP</div>
+          <div class="fs-sub">Oracle / SAP<br>/ OMS / WMS</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn8">8</div>
+          <div class="fs-label">Generate Reply</div>
+          <div class="fs-sub">850 ACK / ASN<br>/ Invoice out</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn9">9</div>
+          <div class="fs-label">Deliver</div>
+          <div class="fs-sub">Outbound via<br>AS2 / SFTP</div>
+        </div>
+        <div class="fs">
+          <div class="fs-num sn10">10</div>
+          <div class="fs-label">Log &amp; Monitor</div>
+          <div class="fs-sub">Audit trail<br>Dashboard alert</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow 3 -->
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-body">
+      <span class="flow-pill fp-green">⬇ Canonical JSON/XML to ERP</span>
+      <span class="flow-pill fp-green">⬆ ERP Events → EDI Out</span>
+      <span class="flow-pill fp-blue">⬇ REST API Calls</span>
+      <span class="flow-pill fp-purple">⬆ Webhooks / Callbacks</span>
+    </div>
+  </div>
+
+  <!-- ▓▓ LANE 4 – EDI STANDARDS ▓▓ -->
+  <div class="lane lane-standards">
+    <div class="lane-tab">EDI Standards</div>
+    <div class="lane-body">
+      <div class="lane-title" style="color:#065f46">📋 Supported EDI Standards &amp; Transaction Sets</div>
+
+      <div class="std-badges">
+        <span class="std-badge sb-x12">✦ ANSI X12</span>
+        <span class="std-badge sb-edif">✦ UN/EDIFACT</span>
+        <span class="std-badge sb-json">✦ JSON/REST</span>
+        <span class="std-badge sb-xml">✦ XML / cXML</span>
+      </div>
+
+      <div class="tx-grid">
+        <div class="tx-card tc-840">
+          <span class="tx-code">840</span>
+          <span class="tx-name">Purchase Requisition</span>
+          <span class="tx-std">X12 · REQOTE (EDIFACT)</span>
+          <span class="tx-desc">Internal PR raised by requestor. Routes into approval workflow before PO generation.</span>
+        </div>
+        <div class="tx-card tc-850">
+          <span class="tx-code">850</span>
+          <span class="tx-name">Purchase Order</span>
+          <span class="tx-std">X12 · ORDERS (EDIFACT)</span>
+          <span class="tx-desc">Standard PO sent to supplier. Supports Blanket, Planned &amp; Contract PO variants.</span>
+        </div>
+        <div class="tx-card tc-855">
+          <span class="tx-code">855 / 865</span>
+          <span class="tx-name">PO Acknowledgement</span>
+          <span class="tx-std">X12 · ORDRSP (EDIFACT)</span>
+          <span class="tx-desc">Supplier confirms or changes acceptance of PO terms and line items.</span>
+        </div>
+        <div class="tx-card tc-856">
+          <span class="tx-code">856</span>
+          <span class="tx-name">Ship Notice (ASN)</span>
+          <span class="tx-std">X12 · DESADV (EDIFACT)</span>
+          <span class="tx-desc">Advance Shipping Notice updates WMS &amp; receiving dock with shipment details.</span>
+        </div>
+        <div class="tx-card tc-810">
+          <span class="tx-code">810</span>
+          <span class="tx-name">Invoice</span>
+          <span class="tx-std">X12 · INVOIC (EDIFACT)</span>
+          <span class="tx-desc">Supplier invoice → AP matching. 2-way, 3-way &amp; 4-way match supported.</span>
+        </div>
+        <div class="tx-card tc-875">
+          <span class="tx-code">875 / 870</span>
+          <span class="tx-name">Sales Order</span>
+          <span class="tx-std">X12 · ORDERS (EDIFACT)</span>
+          <span class="tx-desc">Inbound customer orders from buyers. Triggers OMS / ERP order creation.</span>
+        </div>
+        <div class="tx-card tc-997">
+          <span class="tx-code">997</span>
+          <span class="tx-name">Functional ACK</span>
+          <span class="tx-std">X12 · CONTRL (EDIFACT)</span>
+          <span class="tx-desc">Auto-generated acknowledgement confirming receipt &amp; syntax validity of EDI set.</span>
+        </div>
+        <div class="tx-card tc-edif">
+          <span class="tx-code">ORDRSP<br>REMADV</span>
+          <span class="tx-name">EDIFACT Messages</span>
+          <span class="tx-std">UN/EDIFACT D96A / D01B</span>
+          <span class="tx-desc">ORDERS, ORDRSP, DESADV, INVOIC, REMADV, CONTRL natively parsed &amp; generated.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow 4 -->
+  <div class="arrow-row">
+    <div class="arrow-spacer"></div>
+    <div class="arrow-body">
+      <span class="flow-pill fp-purple">⬇ PO / PR / SO data via REST</span>
+      <span class="flow-pill fp-purple">⬆ Confirmations &amp; Status</span>
+      <span class="flow-pill fp-green">⬇ Invoice &amp; ASN payloads</span>
+      <span class="flow-pill fp-blue">⬆ Receipts &amp; GL entries</span>
+    </div>
+  </div>
+
+  <!-- ▓▓ LANE 5 – BACKEND ERP ▓▓ -->
+  <div class="lane lane-erp">
+    <div class="lane-tab">ERP / Backend</div>
+    <div class="lane-body">
+      <div class="lane-title" style="color:#5b21b6">🏛️ Backend Systems of Record</div>
+      <div class="erp-grid">
+
+        <div class="erp-node erp-gold">
+          <div class="erp-icon">🏛️</div>
+          <div class="erp-title">Oracle ERP</div>
+          <div class="erp-mod">Purchasing · Requisitions<br>AP · AR · GL · Inventory<br>Order Mgmt (OMS)</div>
+        </div>
+
+        <div class="erp-node erp-blue">
+          <div class="erp-icon">🔷</div>
+          <div class="erp-title">SAP ERP</div>
+          <div class="erp-mod">MM · SD · FI · WM<br>BAPI / RFC / IDoc<br>S/4HANA ready</div>
+        </div>
+
+        <div class="erp-node erp-green">
+          <div class="erp-icon">☁️</div>
+          <div class="erp-title">Salesforce</div>
+          <div class="erp-mod">OMS · CRM<br>Commerce Cloud<br>REST API</div>
+        </div>
+
+        <div class="erp-node erp-purple">
+          <div class="erp-icon">📦</div>
+          <div class="erp-title">WMS</div>
+          <div class="erp-mod">Warehouse Mgmt<br>Receiving · Picking<br>ASN Processing</div>
+        </div>
+
+        <div class="erp-node erp-pink">
+          <div class="erp-icon">💳</div>
+          <div class="erp-title">AP / Payments</div>
+          <div class="erp-mod">Invoice Matching<br>2-way / 3-way / 4-way<br>Payment runs</div>
+        </div>
+
+        <div class="erp-node erp-green">
+          <div class="erp-icon">📊</div>
+          <div class="erp-title">Analytics / BI</div>
+          <div class="erp-mod">Transaction reports<br>SLA dashboards<br>Audit &amp; compliance</div>
+        </div>
+
+        <div class="erp-node erp-blue">
+          <div class="erp-icon">🏥</div>
+          <div class="erp-title">Healthcare (HIS)</div>
+          <div class="erp-mod">HIPAA 834 / 837<br>Payer / Provider<br>Eligibility checks</div>
+        </div>
+
+        <div class="erp-node erp-purple">
+          <div class="erp-icon">🗄️</div>
+          <div class="erp-title">Data Warehouse</div>
+          <div class="erp-mod">EDI archive<br>SQL / NoSQL<br>Long-term retention</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /canvas -->
+
+<!-- Footer -->
+<div class="footer">
+  Agent Eddy_PLATFORM_ARCH_v1.0 &nbsp;·&nbsp; X12 · EDIFACT D96A/D01B · JSON · XML · cXML &nbsp;·&nbsp; AS2 · AS4 · SFTP · REST · MQ
+</div>
+
+</body>
+</html>

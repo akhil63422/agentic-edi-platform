@@ -1,13 +1,12 @@
-import React from 'react';
-import { Link2, CheckCircle2, AlertCircle, Brain } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link2, CheckCircle2, AlertCircle, Brain, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import api from '@/services/api';
 
-export const Step6Mapping = ({ data, onChange }) => {
-  // Mock mapping suggestions from Build Agent
-  const suggestedMappings = [
+const DEFAULT_MAPPINGS = [
     {
       id: 1,
       source: 'BIG02',
@@ -34,13 +33,46 @@ export const Step6Mapping = ({ data, onChange }) => {
     },
   ];
 
+export const Step6Mapping = ({ data, onChange }) => {
+  const [suggestedMappings, setSuggestedMappings] = useState(data.aiMappings || DEFAULT_MAPPINGS);
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerateMapping = async () => {
+    setGenerating(true);
+    try {
+      const sourceSchema = { segments: ['BEG', 'N1', 'N2', 'N3', 'N4', 'IT1', 'CTT', 'SE'], document_type: '850' };
+      const x12Schema = { segments: { BEG: { elements: 6 }, N1: { elements: 4 }, IT1: { elements: 12 } }, document_type: '850' };
+      const res = await api.post('/ai/generate-mapping', {
+        source_schema: sourceSchema,
+        x12_schema: x12Schema,
+        document_type: '850',
+      });
+      const fm = res.data?.mapping?.field_mappings || [];
+      const mapped = fm.map((m, i) => ({
+        id: i + 1,
+        source: m.source_field || m.source,
+        target: m.target_field || m.target,
+        confidence: Math.round((m.confidence || 0.85) * 100),
+        status: 'pending',
+        explanation: m.reason || 'AI-suggested mapping',
+      }));
+      if (mapped.length > 0) {
+        setSuggestedMappings(mapped);
+        onChange({ aiMappings: mapped, mappings: [...(data.mappings || []), ...mapped] });
+      }
+    } catch (e) {
+      console.error('Generate mapping failed:', e);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleApproveMapping = (id) => {
-    const mappings = data.mappings || [];
     const mapping = suggestedMappings.find((m) => m.id === id);
     if (mapping) {
-      onChange({
-        mappings: [...mappings, { ...mapping, status: 'approved' }],
-      });
+      const updated = suggestedMappings.map((m) => (m.id === id ? { ...m, status: 'approved' } : m));
+      setSuggestedMappings(updated);
+      onChange({ mappings: [...(data.mappings || []).filter((x) => x.id !== id), { ...mapping, status: 'approved' }] });
     }
   };
 
@@ -62,13 +94,17 @@ export const Step6Mapping = ({ data, onChange }) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Brain className="w-5 h-5" />
-            AI Activity
+            AI Mapping Agent (Assist Mode)
           </CardTitle>
           <CardDescription>
-            Build Agent has analyzed partner specifications and generated mapping suggestions
+            Generate mapping suggestions via /generate-mapping. Review and approve before use.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <Button onClick={handleGenerateMapping} disabled={generating} variant="outline" className="gap-2">
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+            {generating ? 'Generating...' : 'Generate AI Mapping'}
+          </Button>
           <div className="flex items-center gap-4">
             <div className="text-2xl font-bold text-warning-foreground">
               {suggestedMappings.length}

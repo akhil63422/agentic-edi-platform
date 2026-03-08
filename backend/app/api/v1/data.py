@@ -7,12 +7,13 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from bson import ObjectId
 from app.core.database import get_database
+from app.api.v1.dependencies import require_auth_if_enabled
 import logging
 import json
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/data", tags=["data"])
+router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_auth_if_enabled)])
 
 
 def serialize_doc(doc: dict) -> dict:

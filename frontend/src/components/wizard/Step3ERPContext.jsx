@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertTriangle, Info, Database, Globe } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, Info, Database, Globe, Key, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 export const Step3ERPContext = ({ data, onChange, onSkip }) => {
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState(null);
+
   const handleChange = (field, value) => {
     onChange({
       erpContext: {
@@ -32,7 +35,7 @@ export const Step3ERPContext = ({ data, onChange, onSkip }) => {
   };
 
   const handleTargetSystemChange = (field, value) => {
-    onChange({
+    const updates = {
       erpContext: {
         ...data.erpContext,
         targetSystem: {
@@ -40,7 +43,44 @@ export const Step3ERPContext = ({ data, onChange, onSkip }) => {
           [field]: value,
         },
       },
+    };
+    if (field === 'system') {
+      updates.erpContext.type = value;  // Sync type for posting
+    }
+    onChange(updates);
+  };
+
+  const handleCredentialsChange = (field, value) => {
+    onChange({
+      erpContext: {
+        ...data.erpContext,
+        [field]: value,
+      },
     });
+  };
+
+  const handleTestConnection = async () => {
+    const endpoint = data.erpContext?.endpoint;
+    const apiKey = data.erpContext?.api_key;
+    if (!endpoint) {
+      setConnectionResult({ ok: false, message: 'Endpoint required' });
+      return;
+    }
+    setTestingConnection(true);
+    setConnectionResult(null);
+    try {
+      const api = (await import('@/services/api')).default;
+      const res = await api.post('/partners/test-erp-connection', {
+        endpoint,
+        api_key: apiKey,
+        type: data.erpContext?.targetSystem?.system || data.erpContext?.type || 'API',
+      });
+      setConnectionResult({ ok: res.data?.success !== false, message: res.data?.message || 'Connected' });
+    } catch (e) {
+      setConnectionResult({ ok: false, message: e.response?.data?.detail || e.message || 'Connection failed' });
+    } finally {
+      setTestingConnection(false);
+    }
   };
 
   return (
@@ -234,6 +274,53 @@ export const Step3ERPContext = ({ data, onChange, onSkip }) => {
                 <p className="text-xs text-muted-foreground">
                   Optional: Team or department responsible for this data
                 </p>
+              </div>
+
+              {/* Endpoint & API Key for posting */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label htmlFor="erpEndpoint" className="flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  Endpoint URL *
+                </Label>
+                <Input
+                  id="erpEndpoint"
+                  value={data.erpContext?.endpoint || ''}
+                  onChange={(e) => handleCredentialsChange('endpoint', e.target.value)}
+                  placeholder="https://api.erp.com/v1/orders"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="erpApiKey" className="flex items-center gap-2">
+                  <Key className="w-4 h-4" />
+                  API Key (masked)
+                </Label>
+                <Input
+                  id="erpApiKey"
+                  type="password"
+                  value={data.erpContext?.api_key || ''}
+                  onChange={(e) => handleCredentialsChange('api_key', e.target.value)}
+                  placeholder="••••••••"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stored for posting; shown masked in UI
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestConnection}
+                  disabled={testingConnection || !data.erpContext?.endpoint}
+                >
+                  {testingConnection ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                </Button>
+                {connectionResult && (
+                  <span className={`text-sm ${connectionResult.ok ? 'text-green-600' : 'text-destructive'}`}>
+                    {connectionResult.message}
+                  </span>
+                )}
               </div>
             </>
           )}

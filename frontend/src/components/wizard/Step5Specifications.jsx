@@ -1,5 +1,5 @@
-import React from 'react';
-import { Upload, FileText, X, Brain } from 'lucide-react';
+import React, { useState } from 'react';
+import { Upload, FileText, X, Brain, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,42 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import api from '@/services/api';
 
 export const Step5Specifications = ({ data, onChange }) => {
+  const [schemaAnalysis, setSchemaAnalysis] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const handleAnalyzeSchema = async () => {
+    const samples = data.sampleFiles || [];
+    const sourceSchema = { segments: [], document_type: data.ediStandard || 'X12 850' };
+    if (samples.length > 0 && samples[0].file) {
+      try {
+        const text = await samples[0].file.text();
+        const segmentMatches = text.match(/[A-Z]{2,4}\*/g) || [];
+        sourceSchema.segments = [...new Set(segmentMatches.map((s) => s.replace('*', '')))];
+      } catch {
+        sourceSchema.segments = ['ISA', 'GS', 'ST', 'BEG', 'N1', 'IT1', 'SE', 'GE', 'IEA'];
+      }
+    } else {
+      sourceSchema.segments = ['ISA', 'GS', 'ST', 'BEG', 'N1', 'IT1', 'SE', 'GE', 'IEA'];
+    }
+    const targetSchema = { fields: ['purchase_order_number', 'buyer_name', 'line_items', 'product_code', 'quantity'] };
+    setAnalyzing(true);
+    try {
+      const res = await api.post('/ai/analyze-schema', {
+        source_schema: sourceSchema,
+        target_schema: targetSchema,
+        document_type: data.ediStandard || '850',
+      });
+      setSchemaAnalysis(res.data.analysis);
+      onChange({ schemaAnalysis: res.data.analysis });
+    } catch (e) {
+      setSchemaAnalysis({ notes: 'Analysis failed: ' + (e.response?.data?.detail || e.message) });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
   const handleFileUpload = (type, files) => {
     const fileList = Array.from(files).map((file) => ({
       id: Date.now() + Math.random(),
@@ -172,31 +206,34 @@ export const Step5Specifications = ({ data, onChange }) => {
         </CardContent>
       </Card>
 
-      {/* Discovery Agent Status */}
+      {/* Schema Analysis (AI /analyze-schema) */}
       {(data.specFiles?.length > 0 || data.sampleFiles?.length > 0) && (
         <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="w-5 h-5" />
-              Discovery Agent Analysis
+              Schema Understanding Agent
             </CardTitle>
             <CardDescription>
-              The Discovery Agent is analyzing uploaded files to extract rules and patterns
+              AI analyzes source vs target schema. Assist Mode — review before use.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Parsing specifications...</span>
-                <span className="font-medium">45%</span>
+            <Button onClick={handleAnalyzeSchema} disabled={analyzing} variant="outline" className="gap-2">
+              {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+              {analyzing ? 'Analyzing...' : 'Analyze Schema with AI'}
+            </Button>
+            {schemaAnalysis && (
+              <div className="text-sm space-y-2 p-3 bg-background rounded border">
+                {schemaAnalysis.notes && <p className="text-muted-foreground">{schemaAnalysis.notes}</p>}
+                {schemaAnalysis.mapping_complexity && (
+                  <p><strong>Complexity:</strong> {schemaAnalysis.mapping_complexity}</p>
+                )}
+                {schemaAnalysis.canonical_suggestions?.length > 0 && (
+                  <p><strong>Canonical suggestions:</strong> {Array.isArray(schemaAnalysis.canonical_suggestions) ? schemaAnalysis.canonical_suggestions.map((s) => (typeof s === 'string' ? s : s?.name || JSON.stringify(s))).join(', ') : ''}</p>
+                )}
               </div>
-              <Progress value={45} className="h-2" />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              <p>• Found 12 mandatory segments</p>
-              <p>• Identified 5 conditional rules</p>
-              <p>• Detected 2 partner-specific quirks</p>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}

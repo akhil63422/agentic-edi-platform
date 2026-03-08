@@ -11,7 +11,13 @@ class EDIDocument(BaseModel):
     partner_code: Optional[str] = None
     document_type: str  # 850, 810, 856, etc.
     direction: str  # Inbound, Outbound
-    status: str = "Received"  # Received, Parsing, Validating, Mapping, Transforming, AI Processing, Completed, Needs Review, Failed
+    flow_type: Optional[str] = None  # inbound, outbound (derived from direction if not set)
+    status: str = "Received"  # Inbound: Received, Parsed, Validated, Canonical Generated, Ready for Dispatch, Dispatched, Failed. Outbound: Created, Routing, Delivering, Delivered, ACK Received, Failed
+    processing_step: Optional[int] = None  # 1-10 per architecture flow
+    stage: Optional[str] = None  # Outbound pipeline stage: Created, Routing, Transform, Delivering, Delivered, ACK Received
+    parent_transaction_id: Optional[str] = None  # Links outbound to inbound (outbound.parent = inbound.id)
+    source_system: Optional[str] = None
+    target_system: Optional[str] = None
     raw_edi: str
     parsed_segments: Optional[List[Dict[str, Any]]] = None
     canonical_json: Optional[Dict[str, Any]] = None
